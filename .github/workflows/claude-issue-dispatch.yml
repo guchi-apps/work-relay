@@ -37,7 +37,7 @@ on:
 
 jobs:
   dispatch:
-    uses: guchi-apps/issue-deck/.github/workflows/reusable-issue-dispatch.yml@workflows/v46
+    uses: guchi-apps/issue-deck/.github/workflows/reusable-issue-dispatch.yml@workflows/v47
     with:
       # 種別（Next.js + DB）に対応するランタイムの用意。
       runtime-setup: node-db
@@ -47,7 +47,7 @@ jobs:
       # CIと食い違わないようにする。
       node-version: "24"
       # uses: のタグと必ず同じ値にする。
-      prompts-ref: workflows/v46
+      prompts-ref: workflows/v47
     # CLAUDE_CODE_OAUTH_TOKEN・WORKFLOW_PATを呼ばれる側へ渡す。
     secrets: inherit
     permissions:
