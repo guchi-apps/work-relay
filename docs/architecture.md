@@ -29,7 +29,12 @@ TypeScript + Tailwind CSS v4 + Prisma 6（MariaDB）+ Supabase Auth（Google）�
   保護範囲を絞って回避した（`matcher: ["/", "/dashboard/:path*"]`）。`/dashboard/:path*`は
   0個以上にマッチするため、`/dashboard`配下に新設した`/dashboard/inbox`（#124）もこのmatcherの
   変更なしで保護対象に入る
-- ログイン可否は `ALLOWED_GOOGLE_EMAILS`（カンマ区切り）で絞る。DBにユーザーテーブルは持たない
+- ログイン可否はStatusHubの共通アクセス設定（`POST /api/access/v1/decision`）で判定する（#281）。
+  `src/lib/access/`が30秒キャッシュ、取得失敗時は最大5分だけ直前の判定を使い、超過・未判定は拒否する。
+  **旧`ALLOWED_GOOGLE_EMAILS`は判定にもフォールバックにも使わない**（残るのは検証後に整理する旧設定）。
+  アプリ別トークンはissue-deckの共有トークン`RESEARCH_DESK_ACCESS_APP_TOKEN`から読み、401なら読み直して
+  1回再試行する。`src/instrumentation.ts`が4分ごとにハートビートを送る（管理画面の「反映済み」の根拠）。
+  DBにユーザーテーブルは持たない。管理画面に入れないときの復旧はstatus-hubの`scripts/access-recover.mjs`
 - `src/lib/auth.ts` の `getCurrentUser()` は「未ログイン」と「Supabaseへ疎通できず今は確認できない
   （`AuthRetryableFetchError` / 429）」を区別する。後者をログイン画面へ差し戻すと、電波の悪い
   場所で開いただけの利用者がログインし直しになるため。`src/proxy.ts`も同じ基準
