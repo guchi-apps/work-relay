@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { decideAccess, toAccessSubject } from "@/lib/access/client";
 import { isRetryableAuthError } from "@/lib/auth-error";
 import { DEV_LOGIN_COOKIE_NAME, verifyDevLoginCookieValue } from "@/lib/dev-login";
 import { createClient } from "@/lib/supabase/server";
@@ -9,14 +10,6 @@ export type CurrentUserResult =
   | { status: "authenticated"; user: CurrentUser }
   | { status: "unauthenticated" }
   | { status: "unavailable" };
-
-function isAllowedEmail(email: string): boolean {
-  const allowed = (process.env.ALLOWED_GOOGLE_EMAILS ?? "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
-  return allowed.includes(email);
-}
 
 async function getDevLoginEmail(): Promise<string | null> {
   const cookieStore = await cookies();
@@ -39,8 +32,9 @@ export async function getCurrentUser(): Promise<CurrentUserResult> {
     return { status: "unauthenticated" };
   }
 
+  // 許可はStatusHubの共通アクセス設定で判定する（旧ALLOWED_GOOGLE_EMAILSは使わない）。
   const email = data.user?.email;
-  if (!email || !isAllowedEmail(email)) {
+  if (!email || !(await decideAccess(toAccessSubject(data.user))).allowed) {
     return { status: "unauthenticated" };
   }
 

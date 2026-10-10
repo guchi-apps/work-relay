@@ -89,3 +89,8 @@ export async function getSharedToken(name: string, fallbackEnv: string): Promise
   if (result.cache) cache.set(name, result.cache);
   return result.value ?? (process.env[fallbackEnv] || undefined);
 }
+
+/** 1つの名前のキャッシュだけ捨てる。再発行で失効した値を握り続けないために、認証の401で呼ぶ。 */
+export function forgetSharedToken(name: string): void {
+  cache.delete(name);
+}
