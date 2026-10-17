@@ -1,6 +1,6 @@
 {
   "name": "research-desk",
-  "version": "1.17.11",
+  "version": "1.17.12",
   "private": true,
   "packageManager": "pnpm@10.34.5",
   "scripts": {
