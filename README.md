@@ -23,7 +23,8 @@ pnpm dev
 ## 運用
 
 - 日常の開発ブランチは `develop`。`main` は本番と一致するリリース用ブランチ
-- `main` へのpushで `.github/workflows/deploy.yml` がVPSへ配る
+- `main` へのpushで `.github/workflows/deploy.yml` がVPSへ配る。VPS上の手順（展開・`.env`更新・依存インストール・
+  マイグレーション・PM2の再起動・稼働版の照合）はVPSの `app-deploy-gate`（gateのアプリ名 `research-desk`）が行う（#302）
 - エージェント運用のルールは [CLAUDE.md](CLAUDE.md)
 
 ### 日次収集

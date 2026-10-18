@@ -579,10 +579,10 @@ PWAとしてホーム画面から起動されたままだと、ブラウザを�
 `visibilitychange`復帰時にポーリングし、現在のバージョンと異なれば画面下部にバナーを表示する。
 
 **応答には稼働しているコミットの`sha`も入る**（#302）。`deploy.yml`が`github.sha`を
-`.env`の`APP_COMMIT_SHA`へ書き、デプロイのヘルスチェックは`/api/app-version`の`sha`が
-今回のコミットと一致するまで成功にしない（`/`は旧版のままでも応答するため、HTTP 200だけでは
+VPSの`app-deploy-gate`へ`APP_COMMIT_SHA`として渡してgateが`.env`へ書き、gateは
+`127.0.0.1:3115/api/app-version`の`sha`が今回のコミットと一致するまで（最大60秒）デプロイを成功にしない（`/`は旧版のままでも応答するため、HTTP 200だけでは
 新しい版が動いている証拠にならない）。issue-deckのリリース完了判定も、対象コミットの
-`deploy.yml`にこの照合（`APP_COMMIT_SHA`と`/api/app-version`）があることを見て「照合付き」と
+`deploy.yml`がgateの`env`へ`APP_COMMIT_SHA`を渡していることを見て「照合付き」と
 扱う。`AppUpdateChecker`は`version`しか読まないため、`sha`を足しても更新検知は変わらない。
 未設定（ローカル開発）なら`null`。
 
@@ -648,8 +648,10 @@ Codex CLIがある（guchi-apps/aide-bot#130）ので、ポーラーもそこへ
   スクリプト側で読む
 - **共有シークレットが無くてもプロセスを終了させない。** `exit`するとPM2の再起動ループになる。
   値は本番の`.env`へデプロイ時に入るので、入るまで待って次の再起動から動き出す
-- `deploy.yml`のPM2差し替えは**アプリとワーカーの両方の名前を挙げて`pm2 delete`する**。
-  片方だけだと古いプロセスが残って新しい配布物で起動し直されない
+- PM2の差し替えはVPSの`app-deploy-gate`が行い、`pm2 delete deploy/ecosystem.config.js`で
+  **ecosystemが宣言するアプリとワーカーの両方を**止めてから起動し直す（#302。それまでは`deploy.yml`が
+  両方の名前を挙げて`pm2 delete`していた）。gateが照合するのはNext.js本体の`sha`だけで、
+  **ワーカーが`online`かはデプロイでは確かめない**（gate導入前は警告として出していた）
 
 ### なぜ専用のジョブキューを新設したか
 
@@ -885,7 +887,7 @@ VPSのポーラー → claim（kind: "collection_search"）→ codex exec ＋ We
   それに従い、無ければ`ANALYSIS_JOB_TIMEOUT_SECONDS`（既定600秒）。**保持期限（`LEASE_SECONDS`＝900秒）
   より短くしておくこと**——超えると実行中にリースが切れ、別のポーラーが同じジョブを取り直す
   （`collection-search-prompt.test.ts`が大小関係を確かめる）。ポーラーのスクリプトを変えたので、
-  この変更のデプロイでワーカーも入れ替わる（`deploy.yml`の`pm2 delete`が両方の名前を挙げている）
+  この変更のデプロイでワーカーも入れ替わる（gateがecosystemの両方のプロセスを`pm2 delete`する）
 - 積むのは`POST /api/collection/daily`の**先頭**（RSS収集より前）。RSS収集が例外で落ちても収集ジョブは
   積まれ、積めなくてもRSS収集の結果は成功のまま返す（応答の`collectionSearch`は`queued`・
   `already_queued`・`failed`）。**新着通知（`notifyNewCandidates()`）は収集ジョブの取り込みでも送る
