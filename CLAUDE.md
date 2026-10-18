@@ -33,12 +33,31 @@ GitHubリポジトリ名は`guchi-apps/work-relay`（#263。旧`research-desk`�
 
 **本番のPM2にはプロセスが2つある**（#86）。Next.js本体（`research-desk`）と、記事AI解析の
 ポーラー（`research-desk-analysis-worker`。VPS上のCodex CLIを起動する）で、どちらも
-`deploy/ecosystem.config.js`に居る。**`ecosystem.config.js`へアプリを足したら`deploy.yml`の
-`pm2 delete`にも名前を足すこと**——`pm2 start`は既に居る同名プロセスを置き換えないため、
-足し忘れると**そのプロセスだけ古い配布物のまま動き続ける**（デプロイは成功する）。
+`deploy/ecosystem.config.js`に居る。本番デプロイはVPSの`app-deploy-gate`が行い（#302）、gateは
+`pm2 delete deploy/ecosystem.config.js`で**ecosystemが宣言するプロセスをすべて**止めてから起動し直すため、
+`ecosystem.config.js`へアプリを足しても`deploy.yml`側で名前を並べる必要は無い（gate導入前は`deploy.yml`の
+`pm2 delete`に名前を並べており、足し忘れるとそのプロセスだけ古い配布物のまま動き続けた）。
+**ecosystemから外したプロセスはgateが止めない**ので、消すときはVPSで`pm2 delete <名前>`と`pm2 save`が要る。
 **Next.js本体は1プロセス（fork）のままにする**（#144）。共有された写真はそのプロセスのメモリに
 一時的に置いており（`src/lib/share-inbox.ts`）、`instances`を増やすと受け取ったプロセスと読み出す
 プロセスが食い違って写真が消える。
+
+## 本番デプロイ（app-deploy-gate）
+
+`main`へのpushで`.github/workflows/deploy.yml`が動き、**VPS上の手順はすべてVPSの`app-deploy-gate`
+（guchi-apps/vps#275）が行う**（#302）。ワークフローがSSHで送れるのは`upload`（配布物）・`env`
+（`KEY=VALUE`を標準入力で1行1変数）・`deploy`の3語だけで、任意のシェルコマンドは実行できない。
+gateは旧配布物の削除・展開・`.env`更新・`pnpm install --prod --frozen-lockfile`・
+`prisma migrate deploy`（`MIGRATE_DATABASE_URL`で。`.env`へは書かない）・PM2の再起動・
+`/api/app-version`の`sha`と`APP_COMMIT_SHA`の照合までを行う。
+
+- **gateのアプリ名は`research-desk`**（リポジトリ名の`work-relay`ではない）。gateは置き場を
+  `/home/github-user/apps/<アプリ名>`に固定し、PM2のプロセス名もアプリ名で止めるため、旧名のままの
+  置き場・PM2のプロセス名（`research-desk`）に合わせる。鍵はアプリ専用の`SSH_PRIVATE_KEY`
+  （`op://apps/work-relay/deploy-ssh-key`）で、VPSの`authorized_keys`の`command=`がアプリ名を固定する
+- **gateの外の処理はデプロイで動かせない。** マイグレーション直前の処理だけは`deploy/pre-migrate.sh`に
+  置ける。記事AI解析のポーラーが`online`かの確認（gate導入前は警告のみ）はデプロイでは行わなくなった
+- `TARGET_DIR`は使わなくなった（マニフェストには移行確認まで残している）
 
 ## 出力言語
 
@@ -83,7 +102,7 @@ Prisma Clientの生成物を型として読むが、生成しているのは `bu
 `Module '"@prisma/client"' has no exported member 'PrismaClient'` と、そこから派生した
 `implicitly has an 'any' type` で落ちる。`pnpm install` の副作用で生成が残っているかどうかに
 結果が左右されるため、**同じコミットでCIが通ったり落ちたりする**という分かりにくい形になる。
-`prisma` をdependencies側に置くのは、`deploy.yml` がVPS上で走らせる
+`prisma` をdependencies側に置くのは、VPSの`app-deploy-gate`が走らせる
 `pnpm install --prod --frozen-lockfile` からもCLIを見えるようにするため（devDependenciesのままだと
 本番のpostinstallが `prisma: not found` で落ちる）。
 
@@ -131,15 +150,18 @@ GitHub Actions上の無人実行では、その場で確認を取る相手がい
 - `.github/secrets-manifest.tsv`で**`scope`が`repo`の行に`SOURCE`が`-`のものを
   作らない。** 同期スクリプトが`op read -`を実行して必ず失敗し、GitHub側に値が
   作られないままワークフローの参照が空で通る（`guchi-apps/aide-bot#5`）
-- **環境変数を1つ足すときに触る場所は4つある**（#31）。`.env.example`に書いただけでは本番へ
-  入らない。`.github/secrets-manifest.tsv`の行、`deploy.yml`の`env:`・`envs:`・`update_env`の
-  3か所を揃えて初めて本番の`.env`に入る。`envs:`に並べ忘れるとSSH先にその変数が存在せず、
-  `update_env`が空文字を書く。**ローカルでは動くのに本番だけ401**という形で出るため気付きにくい
+- **環境変数を1つ足すときに触る場所は5つある**（#31・#302）。`.env.example`に書いただけでは本番へ
+  入らない。`.github/secrets-manifest.tsv`の行、`deploy.yml`の`deploy`ジョブの`env:`、
+  `Send environment variables`ステップの`env:`・改行チェックの`for name in`・`printf`の行を揃えて
+  初めて本番の`.env`に入る（gateが標準入力の`KEY=VALUE`を`.env`へ書く。`MIGRATE_DATABASE_URL`だけは
+  `.env`へ書かれずマイグレーションに使われる）。`printf`に並べ忘れるとその変数は本番の`.env`に入らない。
+  **ローカルでは動くのに本番だけ401**という形で出るため気付きにくい
   （`COLLECTION_MCP_SECRET`・`COLLECTION_CRON_SECRET`が実際にこの状態で、`/api/mcp`も
   `/api/collection/weekly`も本番では一度も通っていなかった）。**過不足は
-  `.env.example`のキーと`deploy.yml`の`update_env`の差分で機械的に拾える**
-  （`grep -oP '^\w+(?==)' .env.example` と `grep -oP 'update_env \K\w+' .github/workflows/deploy.yml`
-  を`comm`で突き合わせる。`DB_*`など組み立て元だけの変数は除く）
+  `.env.example`のキーと`deploy.yml`の`printf`の差分で機械的に拾える**
+  （`grep -oP '^\w+(?==)' .env.example` と `grep -oP "printf '%s\\\\n' \"\K\w+(?==)" .github/workflows/deploy.yml`
+  を`comm`で突き合わせる。`DB_*`など組み立て元だけの変数は除く）。**gateは改行を含む値を送れない**ので、
+  複数行の値はbase64の1行にしてアプリ側で戻す
 - **定期実行のワークフローが動くのはデフォルトブランチ（`develop`）のファイルだけ**（#33）。
   `.github/workflows/collection-daily.yml`（旧`collection-weekly.yml`）のcronは`develop`へマージした時点で**本番に対して**
   動き始めるが、本番の`.env`へ値が入るのは`develop`→`main`のリリースがデプロイされたとき。

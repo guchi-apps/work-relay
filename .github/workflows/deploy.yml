@@ -95,7 +95,7 @@ jobs:
     #
     # このブロックは scripts/generate-workflow-env-block.sh で生成する（guchi-apps/issue-deck#1307）。
     env:
-      SSH_PRIVATE_KEY: ${{ secrets.SERVER_SSH_PRIVATE_KEY }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
       HOST: ${{ secrets.SERVER_HOST }}
       USERNAME: ${{ secrets.SERVER_USERNAME }}
       SSH_PORT: ${{ secrets.SERVER_SSH_PORT }}
@@ -159,6 +159,9 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: ${{ env.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
 
+      # 実行時に使うファイルだけを固める。scripts/codex-analysis-worker.mjs は記事AI解析のポーラー
+      # （deploy/ecosystem.config.js の research-desk-analysis-worker）が実行するので外さない。
+      # .env の更新はgateが行うため scripts/update-env-file.sh は配らない（#302）。
       - name: Create archive
         run: |
           tar -czf deploy.tar.gz \
@@ -168,8 +171,6 @@ jobs:
             .next \
             prisma \
             deploy \
-            scripts/construct-database-url.sh \
-            scripts/update-env-file.sh \
             scripts/codex-analysis-worker.mjs \
             next.config.mjs
 
@@ -191,7 +192,7 @@ jobs:
     #
     # このブロックは scripts/generate-workflow-env-block.sh で生成する（guchi-apps/issue-deck#1307）。
     env:
-      SSH_PRIVATE_KEY: ${{ secrets.SERVER_SSH_PRIVATE_KEY }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
       HOST: ${{ secrets.SERVER_HOST }}
       USERNAME: ${{ secrets.SERVER_USERNAME }}
       SSH_PORT: ${{ secrets.SERVER_SSH_PORT }}
@@ -253,17 +254,29 @@ jobs:
           HOST: ${{ env.HOST }}
           SSH_PORT: ${{ env.SSH_PORT }}
 
+      # **VPSのgate（/usr/local/sbin/app-deploy-gate。guchi-apps/vps#275）へ渡す**（#302）。
+      # 鍵はこのアプリ専用で、VPSのauthorized_keysのcommand=がgateのアプリ名（research-desk。置き場の
+      # /home/github-user/apps/research-desk とpm2のプロセス名に一致する。リポジトリ名はwork-relayへ
+      # 変えたが、置き場・pm2・DB名は旧名のまま）を固定する。任意のシェルコマンドは実行できず、
+      # upload・env・deployの3語だけが通る。旧配布物の削除・展開・.env更新・pnpm install・
+      # prisma migrate deploy（MIGRATE_DATABASE_URLは.envへ書かずここだけで使う）・pm2の再起動
+      # （deploy/ecosystem.config.jsが宣言するresearch-deskとresearch-desk-analysis-workerの両方を
+      # pm2 deleteしてから起動し直す）・稼働版の照合はgate側が行う。
       - name: Upload archive
-        run: scp -P "${SSH_PORT}" deploy.tar.gz "${USERNAME}@${HOST}:${TARGET_DIR}/deploy.tar.gz"
+        run: ssh -p "${SSH_PORT}" "${USERNAME}@${HOST}" upload < deploy.tar.gz
         env:
           HOST: ${{ env.HOST }}
           USERNAME: ${{ env.USERNAME }}
           SSH_PORT: ${{ env.SSH_PORT }}
-          TARGET_DIR: ${{ env.TARGET_DIR }}
 
-      - name: Deploy and restart
-        uses: appleboy/ssh-action@v1
+      - name: Send environment variables
         env:
+          HOST: ${{ env.HOST }}
+          USERNAME: ${{ env.USERNAME }}
+          SSH_PORT: ${{ env.SSH_PORT }}
+          # 稼働している版の照合に使う（#302）。gateが.envのAPP_COMMIT_SHAと稼働中の
+          # /api/app-versionのshaを照合する（guchi-apps/vps#298）。コミットのSHAは公開情報
+          APP_COMMIT_SHA: ${{ github.sha }}
           DATABASE_URL: ${{ env.DATABASE_URL }}
           MIGRATE_DATABASE_URL: ${{ env.MIGRATE_DATABASE_URL }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ env.NEXT_PUBLIC_SUPABASE_URL }}
@@ -288,114 +301,60 @@ jobs:
           AIDE_TEXT_MAIL_TOKEN: ${{ env.AIDE_TEXT_MAIL_TOKEN }}
           SHARED_TOKEN_API_SECRET: ${{ env.SHARED_TOKEN_API_SECRET }}
           ISSUE_DECK_URL: ${{ env.ISSUE_DECK_URL }}
-          TARGET_DIR: ${{ env.TARGET_DIR }}
-        with:
-          host: ${{ env.HOST }}
-          username: ${{ env.USERNAME }}
-          key: ${{ env.SSH_PRIVATE_KEY }}
-          port: ${{ env.SSH_PORT }}
-          # ここに無い変数はSSH先に存在しない。env: と同じ名前を必ず並べる。
-          envs: DATABASE_URL,MIGRATE_DATABASE_URL,NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,ALLOWED_GOOGLE_EMAILS,INTERNAL_API_KEY,ANALYSIS_WORKER_SECRET,OPS_API_TOKEN,COLLECTION_CRON_SECRET,SHARE_SHORTCUT_TOKEN,VAPID_PUBLIC_KEY,VAPID_PRIVATE_KEY,VAPID_SUBJECT,AIDE_BOT_URL,AIDE_BOT_TOKEN,AIDE_BOT_EMAIL,AIDE_IMAGE_MAIL_URL,AIDE_IMAGE_MAIL_TOKEN,AIDE_NEWS_MAIL_URL,AIDE_NEWS_MAIL_TOKEN,AIDE_TEXT_MAIL_URL,AIDE_TEXT_MAIL_TOKEN,SHARED_TOKEN_API_SECRET,ISSUE_DECK_URL,TARGET_DIR
-          script: |
-            set -euo pipefail
-            cd "${TARGET_DIR}"
+        run: |
+          set -euo pipefail
+          # マイグレーション専用ユーザー（DDL権限あり）が未設定のときは通常ユーザーで流す。
+          # 空のまま送るとgateはマイグレーションを黙って飛ばすため、必ず値を入れて送る。
+          MIGRATE_DATABASE_URL="${MIGRATE_DATABASE_URL:-$DATABASE_URL}"
+          # gateは標準入力を1行1変数（KEY=VALUE）で受けるため、改行を含む値は送れない。
+          for name in DATABASE_URL MIGRATE_DATABASE_URL NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY \
+            ALLOWED_GOOGLE_EMAILS INTERNAL_API_KEY ANALYSIS_WORKER_SECRET OPS_API_TOKEN COLLECTION_CRON_SECRET \
+            SHARE_SHORTCUT_TOKEN VAPID_PUBLIC_KEY VAPID_PRIVATE_KEY VAPID_SUBJECT AIDE_BOT_URL AIDE_BOT_TOKEN \
+            AIDE_BOT_EMAIL AIDE_IMAGE_MAIL_URL AIDE_IMAGE_MAIL_TOKEN AIDE_NEWS_MAIL_URL AIDE_NEWS_MAIL_TOKEN \
+            AIDE_TEXT_MAIL_URL AIDE_TEXT_MAIL_TOKEN SHARED_TOKEN_API_SECRET ISSUE_DECK_URL; do
+            case "${!name}" in
+              *$'\n'*) echo "::error::${name} が改行を含むためgateへ送れません"; exit 1 ;;
+            esac
+          done
+          # 待受ポートはシークレットではなく設定値として平文で持つ
+          # （guchi-apps/docs の standards/ports.md「ポート番号は 1Password で管理しない」）。
+          {
+            printf '%s\n' "NODE_ENV=production" "PORT=3115"
+            printf '%s\n' "APP_COMMIT_SHA=${APP_COMMIT_SHA}"
+            printf '%s\n' "DATABASE_URL=${DATABASE_URL}"
+            printf '%s\n' "MIGRATE_DATABASE_URL=${MIGRATE_DATABASE_URL}"
+            printf '%s\n' "NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}"
+            printf '%s\n' "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}"
+            printf '%s\n' "ALLOWED_GOOGLE_EMAILS=${ALLOWED_GOOGLE_EMAILS}"
+            printf '%s\n' "INTERNAL_API_KEY=${INTERNAL_API_KEY}"
+            printf '%s\n' "ANALYSIS_WORKER_SECRET=${ANALYSIS_WORKER_SECRET}"
+            printf '%s\n' "OPS_API_TOKEN=${OPS_API_TOKEN}"
+            printf '%s\n' "COLLECTION_CRON_SECRET=${COLLECTION_CRON_SECRET}"
+            printf '%s\n' "SHARE_SHORTCUT_TOKEN=${SHARE_SHORTCUT_TOKEN}"
+            printf '%s\n' "VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}"
+            printf '%s\n' "VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}"
+            printf '%s\n' "VAPID_SUBJECT=${VAPID_SUBJECT}"
+            printf '%s\n' "AIDE_BOT_URL=${AIDE_BOT_URL}"
+            printf '%s\n' "AIDE_BOT_TOKEN=${AIDE_BOT_TOKEN}"
+            printf '%s\n' "AIDE_BOT_EMAIL=${AIDE_BOT_EMAIL}"
+            printf '%s\n' "AIDE_IMAGE_MAIL_URL=${AIDE_IMAGE_MAIL_URL}"
+            printf '%s\n' "AIDE_IMAGE_MAIL_TOKEN=${AIDE_IMAGE_MAIL_TOKEN}"
+            printf '%s\n' "AIDE_NEWS_MAIL_URL=${AIDE_NEWS_MAIL_URL}"
+            printf '%s\n' "AIDE_NEWS_MAIL_TOKEN=${AIDE_NEWS_MAIL_TOKEN}"
+            printf '%s\n' "AIDE_TEXT_MAIL_URL=${AIDE_TEXT_MAIL_URL}"
+            printf '%s\n' "AIDE_TEXT_MAIL_TOKEN=${AIDE_TEXT_MAIL_TOKEN}"
+            printf '%s\n' "SHARED_TOKEN_API_SECRET=${SHARED_TOKEN_API_SECRET}"
+            printf '%s\n' "ISSUE_DECK_URL=${ISSUE_DECK_URL}"
+          } | ssh -p "${SSH_PORT}" "${USERNAME}@${HOST}" env
 
-            # 待受ポートはシークレットではなく設定値として平文で持つ
-            # （guchi-apps/docs の standards/ports.md「ポート番号は 1Password で管理しない」）。
-            PORT=3115
-
-            echo "Cleaning up old release files..."
-            # 配布物を増やしたらこの行にも足す。永続させたいディレクトリは絶対に入れない。
-            # next.config.ts は旧配布物の残り（next.config.mjs へ置き換えた）。本番に残っている古い方を消すため外さない。
-            rm -rf package.json pnpm-lock.yaml public .next prisma deploy scripts next.config.mjs next.config.ts
-
-            echo "Extracting archive..."
-            tar -xzf deploy.tar.gz
-            rm deploy.tar.gz
-
-            update_env() {
-              bash scripts/update-env-file.sh .env "$1" "$2"
-            }
-
-            echo "Updating .env..."
-            update_env NODE_ENV production
-            update_env PORT "$PORT"
-            update_env DATABASE_URL "$DATABASE_URL"
-            update_env NEXT_PUBLIC_SUPABASE_URL "$NEXT_PUBLIC_SUPABASE_URL"
-            update_env NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY "$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
-            update_env ALLOWED_GOOGLE_EMAILS "$ALLOWED_GOOGLE_EMAILS"
-            update_env INTERNAL_API_KEY "$INTERNAL_API_KEY"
-            update_env ANALYSIS_WORKER_SECRET "$ANALYSIS_WORKER_SECRET"
-            update_env OPS_API_TOKEN "$OPS_API_TOKEN"
-            update_env COLLECTION_CRON_SECRET "$COLLECTION_CRON_SECRET"
-            update_env SHARE_SHORTCUT_TOKEN "$SHARE_SHORTCUT_TOKEN"
-            update_env VAPID_PUBLIC_KEY "$VAPID_PUBLIC_KEY"
-            update_env VAPID_PRIVATE_KEY "$VAPID_PRIVATE_KEY"
-            update_env VAPID_SUBJECT "$VAPID_SUBJECT"
-            update_env AIDE_BOT_URL "$AIDE_BOT_URL"
-            update_env AIDE_BOT_TOKEN "$AIDE_BOT_TOKEN"
-            update_env AIDE_BOT_EMAIL "$AIDE_BOT_EMAIL"
-            update_env AIDE_IMAGE_MAIL_URL "$AIDE_IMAGE_MAIL_URL"
-            update_env AIDE_IMAGE_MAIL_TOKEN "$AIDE_IMAGE_MAIL_TOKEN"
-            update_env AIDE_NEWS_MAIL_URL "$AIDE_NEWS_MAIL_URL"
-            update_env AIDE_NEWS_MAIL_TOKEN "$AIDE_NEWS_MAIL_TOKEN"
-            update_env AIDE_TEXT_MAIL_URL "$AIDE_TEXT_MAIL_URL"
-            update_env AIDE_TEXT_MAIL_TOKEN "$AIDE_TEXT_MAIL_TOKEN"
-            update_env SHARED_TOKEN_API_SECRET "$SHARED_TOKEN_API_SECRET"
-            update_env ISSUE_DECK_URL "$ISSUE_DECK_URL"
-
-            echo "Installing production dependencies..."
-            corepack enable pnpm >/dev/null 2>&1 || true
-            pnpm install --prod --frozen-lockfile
-
-            echo "Applying database migrations..."
-            DATABASE_URL="$MIGRATE_DATABASE_URL" pnpm exec prisma migrate deploy
-
-            echo "Restarting PM2..."
-            if command -v pm2 >/dev/null 2>&1; then
-              # 記事AI解析のポーラー（#86）もこの ecosystem に入っている。名前を挙げて
-              # 消さないと古いプロセスが残り、新しい配布物で起動し直されない。
-              pm2 delete research-desk 2>/dev/null || true
-              pm2 delete research-desk-analysis-worker 2>/dev/null || true
-              PORT="$PORT" pm2 start deploy/ecosystem.config.js --env production
-              pm2 save
-            else
-              echo "pm2 is required on the server. Install: npm install -g pm2"
-              exit 1
-            fi
-
-            echo "Health check..."
-            # Next.js は起動完了までに数秒かかる。1回だけのcurlでは起動が間に合わずに
-            # 失敗するため、一定時間リトライする。
-            APP_OK=0
-            for i in $(seq 1 30); do
-              if curl -fsS -o /dev/null "http://127.0.0.1:${PORT}/"; then
-                APP_OK=1
-                break
-              fi
-              sleep 2
-            done
-
-            if [ "$APP_OK" != 1 ]; then
-              echo "Health check failed after 60s."
-              pm2 describe research-desk || true
-              pm2 logs research-desk --lines 50 --nostream || true
-              exit 1
-            fi
-
-            # 記事AI解析のポーラー（#86）。**落ちていてもデプロイは失敗させない**——
-            # 解析が動かないだけで、収集・週報・画面表示は影響を受けないため。
-            # ポーラーは共有シークレット未設定でもプロセスを終わらせない作りなので、
-            # ここが online でなければ配布か起動そのものの問題。
-            if pm2 describe research-desk-analysis-worker 2>/dev/null | grep -q "online"; then
-              echo "Analysis worker is online."
-            else
-              echo "::warning::記事AI解析のポーラー（research-desk-analysis-worker）が起動していません。pm2 logs research-desk-analysis-worker で確認してください。"
-              pm2 logs research-desk-analysis-worker --lines 30 --nostream || true
-            fi
-
-            echo "Deployment successful."
-            exit 0
+      # 記事AI解析のポーラー（research-desk-analysis-worker・#86）が online かの確認（従来は警告のみ）は、
+      # gateが任意のコマンドを通さないためここでは行わない。gateはNext.js本体の稼働版（sha）だけを照合する。
+      - name: Deploy and restart
+        run: ssh -p "${SSH_PORT}" "${USERNAME}@${HOST}" deploy
+        env:
+          HOST: ${{ env.HOST }}
+          USERNAME: ${{ env.USERNAME }}
+          SSH_PORT: ${{ env.SSH_PORT }}
 
       # **deployジョブの成功は公開できたことを保証しない**（guchi-apps/issue-deck#2252）。
       # 上のヘルスチェックが叩くのはVPS内の127.0.0.1で、ApacheのVirtualHostが無くても通る。
