@@ -1,5 +1,6 @@
 import { getCurrentUser } from "@/lib/auth";
 import { json } from "@/lib/internal-auth";
+import { getSharedToken } from "@/lib/shared-token";
 import { buildTextMail, parseTextMailRequest } from "@/lib/text-mail";
 
 export const runtime = "nodejs";
@@ -12,10 +13,11 @@ interface AideTextMailConfig {
 }
 
 // research-desk→AIDE方向。画像メール・週報メールと同じ流儀で、持つのは「AIDEのベースURL・
-// トークン」だけにし、パス（/api/text-mail/send）はコード側が足す。
-function readAideTextMailConfig(): AideTextMailConfig | null {
+// トークン」だけにし、パス（/api/text-mail/send）はコード側が足す。トークンはissue-deckの共有トークン
+// `AIDE_TEXT_MAIL_TOKEN`を優先し、取得できないときだけ同名の環境変数へ倒す（#305）。
+async function readAideTextMailConfig(): Promise<AideTextMailConfig | null> {
   const url = (process.env.AIDE_TEXT_MAIL_URL ?? "").trim().replace(/\/$/, "");
-  const token = (process.env.AIDE_TEXT_MAIL_TOKEN ?? "").trim();
+  const token = ((await getSharedToken("AIDE_TEXT_MAIL_TOKEN", "AIDE_TEXT_MAIL_TOKEN")) ?? "").trim();
   if (!url || !token) return null;
   return { url, token };
 }
@@ -36,7 +38,7 @@ export async function POST(request: Request) {
   if (user.status === "unavailable") return json({ error: "auth_unavailable" }, 503);
   if (user.status !== "authenticated") return json({ error: "unauthorized" }, 401);
 
-  const config = readAideTextMailConfig();
+  const config = await readAideTextMailConfig();
   if (!config) return json({ error: "aide_not_configured", message: "AIDEとの連携が未設定です" }, 503);
 
   let body: unknown;
