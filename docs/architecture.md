@@ -578,6 +578,14 @@ PWAとしてホーム画面から起動されたままだと、ブラウザを�
 `version`を`force-dynamic`＋`no-store`で返すだけのRoute Handler）を10分間隔と
 `visibilitychange`復帰時にポーリングし、現在のバージョンと異なれば画面下部にバナーを表示する。
 
+**応答には稼働しているコミットの`sha`も入る**（#302）。`deploy.yml`が`github.sha`を
+`.env`の`APP_COMMIT_SHA`へ書き、デプロイのヘルスチェックは`/api/app-version`の`sha`が
+今回のコミットと一致するまで成功にしない（`/`は旧版のままでも応答するため、HTTP 200だけでは
+新しい版が動いている証拠にならない）。issue-deckのリリース完了判定も、対象コミットの
+`deploy.yml`にこの照合（`APP_COMMIT_SHA`と`/api/app-version`）があることを見て「照合付き」と
+扱う。`AppUpdateChecker`は`version`しか読まないため、`sha`を足しても更新検知は変わらない。
+未設定（ローカル開発）なら`null`。
+
 **Service Workerは使わない。** issue-deckも同名の`AppUpdateChecker`コンポーネントを持つが、
 アップデート検知にService Workerは使っておらず（`public/sw.js`はPush通知の受信専用）、
 同じバージョンポーリング方式を踏襲した。オフライン対応（Service Workerによるキャッシュ）は
