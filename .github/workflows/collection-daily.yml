@@ -81,7 +81,7 @@ jobs:
           fi
 
           # フィード側の一時障害は status=PARTIAL / FAILED で返る。既存データは変更されない。
-          if ! STATUS=$(jq -r '.status // "UNKNOWN"' "$BODY") || ! FETCHED=$(jq -r '.fetchedCount // 0' "$BODY"); then
+          if ! STATUS=$(jq -r '.status // "UNKNOWN"' "$BODY") || ! FETCHED=$(jq -r '.fetchedCount // 0' "$BODY") || [ -z "$STATUS" ]; then
             echo "::error::日次収集APIの応答をJSONとして読めませんでした。"
             alert "収集APIの応答を解釈できませんでした（HTTP 200）"
             exit 1
