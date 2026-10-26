@@ -53,6 +53,7 @@ jobs:
 
           if [ -z "${COLLECTION_CRON_SECRET}" ]; then
             echo "::error::COLLECTION_CRON_SECRET がGitHubのsecretに登録されていません。scripts/provision-secret.sh で登録してください。"
+            alert "COLLECTION_CRON_SECRET がGitHubのsecretに未登録のため、収集を実行できませんでした"
             exit 1
           fi
 
@@ -66,10 +67,10 @@ jobs:
           # レスポンスにシークレットは含まれない。runIdと件数を運用ログとして残す。
           jq . "$BODY" 2>/dev/null || cat "$BODY"
 
-          # 401（シークレット不整合）はワークフロー全体の失敗として共通のGitHub Actions異常監視が
-          # 拾うので、ここでは通知しない。
+          # 401（シークレット不整合）も収集が止まる異常なので通知する（値は出さない）。
           if [ "$CODE" = "401" ]; then
             echo "::error::401 unauthorized。本番の.envにCOLLECTION_CRON_SECRETが入っていないか、GitHub側の値と食い違っています。"
+            alert "収集APIが401を返しました（COLLECTION_CRON_SECRET の未設定または不一致）"
             exit 1
           fi
           if [ "$CODE" != "200" ]; then
