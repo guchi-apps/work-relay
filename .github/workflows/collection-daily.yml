@@ -7,7 +7,8 @@ name: Daily Collection
 # **スケジュール実行はデフォルトブランチ（develop）のこのファイルだけが対象。**
 # 叩く先は本番（https://research-desk.gucchii.com/）なので、developへマージした時点で
 # 本番に対して動き始める。本番の`.env`へ COLLECTION_CRON_SECRET が入るのは
-# develop→mainのリリースがデプロイされたときなので、それまでは401で失敗する。
+# develop→mainのリリースがデプロイされたときなので、それまでは401で失敗し、
+# Discordにも異常通知が飛ぶ（#314）。
 on:
   schedule:
     # GitHub Actionsのcronは常にUTC。05:00 JST = 前日20:00 UTC。
@@ -31,11 +32,29 @@ jobs:
       - name: 日次収集を実行する
         env:
           COLLECTION_CRON_SECRET: ${{ secrets.COLLECTION_CRON_SECRET }}
+          DISCORD_ALERT_WEBHOOK_URL: ${{ secrets.DISCORD_ALERT_WEBHOOK_URL }}
         run: |
           set -euo pipefail
 
+          # 異常のときだけDiscordへ通知する（#311）。成功・通常の完了は通知しない。
+          # 通知の失敗でrunの成否は変えない（収集の合否そのものではないため）。
+          alert() {
+            if [ -z "${DISCORD_ALERT_WEBHOOK_URL:-}" ]; then
+              echo "::warning::DISCORD_ALERT_WEBHOOK_URL が未設定のため、Discordへ通知できません。"
+              return 0
+            fi
+            local payload
+            payload=$(jq -n --arg msg "$1" --arg url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+              '{content: ("【work-relay】日次収集の異常: " + $msg + "\n" + $url)}') || return 0
+            local code
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 -X POST \
+              -H 'Content-Type: application/json' -d "$payload" "$DISCORD_ALERT_WEBHOOK_URL") || code=000
+            echo "Discord通知: HTTP ${code}"
+          }
+
           if [ -z "${COLLECTION_CRON_SECRET}" ]; then
             echo "::error::COLLECTION_CRON_SECRET がGitHubのsecretに登録されていません。scripts/provision-secret.sh で登録してください。"
+            alert "COLLECTION_CRON_SECRET がGitHubのsecretに未登録のため、収集を実行できませんでした"
             exit 1
           fi
 
@@ -49,40 +68,35 @@ jobs:
           # レスポンスにシークレットは含まれない。runIdと件数を運用ログとして残す。
           jq . "$BODY" 2>/dev/null || cat "$BODY"
 
+          # 401（シークレット不整合）も収集が止まる異常なので通知する（値は出さない）。
           if [ "$CODE" = "401" ]; then
             echo "::error::401 unauthorized。本番の.envにCOLLECTION_CRON_SECRETが入っていないか、GitHub側の値と食い違っています。"
+            alert "収集APIが401を返しました（COLLECTION_CRON_SECRET の未設定または不一致）"
             exit 1
           fi
           if [ "$CODE" != "200" ]; then
             echo "::error::日次収集APIがHTTP ${CODE}を返しました。"
+            alert "収集APIがHTTP ${CODE}を返しました（収集失敗）"
             exit 1
           fi
 
           # フィード側の一時障害は status=PARTIAL / FAILED で返る。既存データは変更されない。
-          STATUS=$(jq -r '.status // "UNKNOWN"' "$BODY")
+          if ! STATUS=$(jq -r '.status // "UNKNOWN"' "$BODY") || ! FETCHED=$(jq -r '.fetchedCount // 0' "$BODY") || [ -z "$STATUS" ]; then
+            echo "::error::日次収集APIの応答をJSONとして読めませんでした。"
+            alert "収集APIの応答を解釈できませんでした（HTTP 200）"
+            exit 1
+          fi
           if [ "$STATUS" = "FAILED" ]; then
             echo "::error::全フィードの取得に失敗しました（status=FAILED）。"
+            alert "全フィードの取得に失敗しました（status=FAILED）"
             exit 1
           fi
           if [ "$STATUS" = "PARTIAL" ]; then
             echo "::warning::一部のフィードの取得に失敗しました（status=PARTIAL）。登録済みのデータは変更されていません。"
+            alert "一部のフィードの取得に失敗しました（必須ソース欠落 / status=PARTIAL）"
           fi
-
-  notify:
-    runs-on: ubuntu-latest
-    needs: collect
-    if: always()
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Signaly に通知
-        # 通知は収集の合否そのものではない。ここが失敗してもrunを落とさない。
-        continue-on-error: true
-        env:
-          SIGNALY_WEBHOOK_URL: ${{ secrets.SIGNALY_WEBHOOK_URL }}
-          NOTIFY_APP: research-desk
-          NOTIFY_KIND: 日次収集
-          NOTIFY_STATUS: ${{ needs.collect.result }}
-        run: bash .github/scripts/signaly-notify.sh
+          # 成功扱いでも1件も取得できていなければ、データが更新されていない（鮮度異常）。
+          if [ "$STATUS" != "FAILED" ] && [ "$FETCHED" = "0" ]; then
+            echo "::warning::取得件数が0件でした（status=${STATUS}）。データが更新されていない可能性があります。"
+            alert "取得件数が0件でした（データの鮮度異常 / status=${STATUS}）"
+          fi
