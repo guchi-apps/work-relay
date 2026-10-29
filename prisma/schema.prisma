@@ -358,3 +358,26 @@ model PushSubscription {
 
   @@map("push_subscriptions")
 }
+
+// iOSアプリ（#317）のログイン引き継ぎ。ASWebAuthenticationSession と WKWebView はCookieを共有しないため、
+// 認証シートで確立したセッションをWebViewへ渡すための、一度限り・短命の記録。
+// 認証シート側の /auth/callback が作り、WKWebView側の /auth/native/consume が一度だけ消費する。
+model NativeAuthHandoff {
+  id            String    @id @default(cuid())
+  // 引き継ぎコード（アプリへ返す値）のSHA-256。値そのものは保存しない
+  codeHash      String    @unique @db.VarChar(64)
+  // 用途。別フローのコードを拒否するため（現状は "login" のみ）
+  purpose       String    @db.VarChar(32)
+  // アプリが持つ code_verifier のS256のSHA-256。消費時に verifier と突き合わせる
+  challengeHash String    @db.VarChar(64)
+  // access/refresh token を secret-cipher.ts で暗号化した文字列
+  sessionCipher String    @db.Text
+  // ログイン後の遷移先（safeNextPath を通した値）
+  next          String?   @db.VarChar(512)
+  expiresAt     DateTime
+  usedAt        DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([expiresAt])
+  @@map("native_auth_handoffs")
+}

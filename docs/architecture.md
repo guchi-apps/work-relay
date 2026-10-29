@@ -996,3 +996,23 @@ versionが変わると、pushトリガーでdevelop→mainのPRが自動作成�
 - 設定値（dayspan・issue-deckと同じ）: 必須チェック`lint-and-build`・strict=false・enforce_admins=false・
   レビュー必須なし・force push/削除禁止。`main`は別途ruleset（`protect main`）で保護している
 - 確認: `gh api repos/guchi-apps/work-relay/branches/develop/protection`
+
+## iOSアプリ（`ios/`、#317）
+
+`ios/`はSwiftUI + WKWebViewの薄い殻で、本番のワークリレーを開くだけ。**画面と機能はWeb版が正本**で、Web/PWA・
+ショートカット・AndroidのWeb Share Targetは変わらない。ビルド・配布・手作業・実機確認は[ios/README.md](../ios/README.md)。
+
+### Googleログインの引き継ぎ
+
+`ASWebAuthenticationSession`（エフェメラル）とWKWebViewはCookieを共有しないため、認証シートで確立した
+Supabaseセッションを**一度限りのコード**でWebViewへ渡す（YoteiFlow #908と同じ方式）。
+
+1. WebViewの`/auth/signin`へのリンクをアプリが捕まえ、PKCEの`verifier`/`challenge`を作って認証シートで`/auth/native/start`を開く
+2. `/auth/callback?native=1&challenge=…`が`decideAccess`（共通アクセス設定）で許可を確かめ、許可外は`workrelay://auth-callback?error=not_allowed`
+3. 許可されたら、セッションのトークンを`NATIVE_AUTH_ENCRYPTION_KEY`でAES-256-GCM暗号化し、`native_auth_handoffs`へ60秒だけ置く
+   （コードはSHA-256で保存）。アプリへ返すのは`workrelay://auth-callback?code=…`のコードだけ
+4. アプリがWebView内から`POST /auth/native/consume`（本文に`code`と`verifier`）を呼ぶと、`setSession`で通常のSupabase SSR Cookieが入る。
+   消費の前に行を使用済みにするので、期限切れ・再利用・verifier不一致はすべて同じ400（総当たりの余地なし）。消費後にも許可を再判定する
+
+トークンはURL・ログ・アプリのコードに出ない。`native`が無い`/auth/callback`は従来どおり。テストは`src/lib/native-auth/*.test.ts`
+（Prismaに繋がない部分。DB操作は`stores.ts`に分離）。
