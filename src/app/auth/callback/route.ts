@@ -57,13 +57,21 @@ async function nativeHandoff(
     return NextResponse.redirect(nativeLoginErrorUrl("not_allowed"));
   }
 
-  const handoffCode = await issueHandoff({
-    store: handoffStore,
-    challenge,
-    sessionCipher: encryptSecret(JSON.stringify({ accessToken: session.access_token, refreshToken: session.refresh_token })),
-    next,
-    now: new Date(),
-  });
+  // 暗号鍵の未設定やDB障害のときは500にせず、アプリへ失敗を返す（コードは発行しない）。
+  let handoffCode: string;
+  try {
+    handoffCode = await issueHandoff({
+      store: handoffStore,
+      challenge,
+      sessionCipher: encryptSecret(JSON.stringify({ accessToken: session.access_token, refreshToken: session.refresh_token })),
+      next,
+      now: new Date(),
+    });
+  } catch (error) {
+    console.error("[work-relay] iOSアプリの引き継ぎコードを発行できません:", error instanceof Error ? error.message : error);
+    await signOutThisApp(supabase);
+    return NextResponse.redirect(nativeLoginErrorUrl("auth_failed"));
+  }
 
   // シートはエフェメラルでCookieが残らず、サーバー側のセッションは失効させない
   // （引き継ぎ先のWKWebViewが同じセッションを使うため）。
