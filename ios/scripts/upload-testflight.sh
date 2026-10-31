@@ -66,7 +66,7 @@ AUTH=(-allowProvisioningUpdates
   -authenticationKeyID "$ASC_KEY_ID"
   -authenticationKeyIssuerID "$ASC_ISSUER_ID")
 
-echo "== Archive（ビルド番号 $BUILD_NUMBER）"
+echo "== Archive（ビルド番号 ${BUILD_NUMBER}）"
 xcodebuild archive \
   -project "$IOS_DIR/WorkRelay.xcodeproj" \
   -scheme WorkRelay \
