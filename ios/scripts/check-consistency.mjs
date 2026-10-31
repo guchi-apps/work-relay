@@ -63,6 +63,11 @@ export function checkConsistency() {
   if (!swiftScheme || !urlSchemes.includes(`<string>${swiftScheme}</string>`)) {
     problems.push(`WorkRelay-Info.plist の CFBundleURLSchemes に ${swiftScheme} がありません`);
   }
+  // 画面の「写真を撮る」（<input type="file" capture>）はWKWebViewがカメラを起動する。
+  // NSCameraUsageDescription が無いとiOSはその場でアプリを強制終了する（#326）
+  if (!/<key>NSCameraUsageDescription<\/key>\s*<string>[^<]+<\/string>/.test(infoPlist)) {
+    problems.push("WorkRelay-Info.plist に NSCameraUsageDescription がありません（カメラ起動でクラッシュする）");
+  }
   const plistRefs = pbxproj.match(/INFOPLIST_FILE = "?WorkRelay-Info\.plist"?;/g)?.length ?? 0;
   const configCount = pbxproj.match(/GENERATE_INFOPLIST_FILE = YES;/g)?.length ?? 0;
   if (plistRefs !== configCount || configCount < 2) {
