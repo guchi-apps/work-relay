@@ -9,7 +9,7 @@
 # 「前回成功したSHA」は ${XDG_STATE_HOME:-~/.local/state}/work-relay/testflight-last-sha に持ち、
 # remote-upload-testflight.sh が **アップロード成功後にだけ** 書き込む。失敗した配布は記録されないので、
 # 次回の判定にその変更が残り続け、漏れない。
-# バイナリに入るもの: ios/WorkRelay/ と ios/WorkRelay.xcodeproj と ios/ExportOptions.plist
+# バイナリに入るもの: ios/WorkRelay/ と ios/WorkRelay.xcodeproj と ios/WorkRelay-Info.plist と ios/ExportOptions.plist
 set -euo pipefail
 
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/work-relay"
@@ -26,7 +26,7 @@ fi
 last_sha="$(cat "$LAST_FILE")"
 git cat-file -e "$last_sha^{commit}" 2>/dev/null || { echo "前回の配布SHA ${last_sha:0:7} がこのリポジトリにありません。" >&2; exit 2; }
 
-changed="$(git diff --name-only "$last_sha" "$head_sha" -- ios/WorkRelay ios/WorkRelay.xcodeproj ios/ExportOptions.plist)"
+changed="$(git diff --name-only "$last_sha" "$head_sha" -- ios/WorkRelay ios/WorkRelay.xcodeproj ios/WorkRelay-Info.plist ios/ExportOptions.plist)"
 if [ -n "$changed" ]; then
   echo "配布が要る: 前回 ${last_sha:0:7} 以降にiOSの変更があります。"
   echo "$changed" | sed 's/^/  /'
