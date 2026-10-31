@@ -4,7 +4,7 @@
 #   op run --env-file=ios/asc.env.tpl -- ios/scripts/upload-testflight.sh
 #
 # 環境変数（必須。値は1Passwordで管理し、リポジトリへは置かない）:
-#   ASC_KEY_P8       App Store Connect API キー（.p8）の中身をbase64の1行にした値（kurashioと共用の apps/MyRoom/asc-key-p8）
+#   ASC_KEY_P8       App Store Connect API キー（.p8）の中身をbase64の1行にした値（kurashioと共用の apps/AppStoreConnect/key-p8）
 #   ASC_KEY_ID       キーID
 #   ASC_ISSUER_ID    Issuer ID
 # 任意:
