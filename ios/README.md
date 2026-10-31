@@ -6,7 +6,7 @@ Web/PWA・ショートカット・AndroidのWeb Share Targetはそのまま残�
 
 | 項目 | 値 |
 |---|---|
-| 表示名 | ワークリレー |
+| 表示名 | workRelay |
 | Bundle ID | `com.gucchii.workrelay`（既存アプリ: issuedeck・kurashio・morrow・yoteiflow・AIDEiosと重ならない） |
 | 署名 | Automatic（Apple Developer Program のチーム `6AA3WFTR94`。他のiOSアプリと同じ） |
 | 対応 | iPhone・縦向き・iOS 18以上 |
@@ -29,7 +29,7 @@ Web/PWA・ショートカット・AndroidのWeb Share Targetはそのまま残�
 
 実装とは別に、次は本人が行います（初回だけ）。
 
-- [ ] [App Store Connect](https://appstoreconnect.apple.com/) → マイApp →「+」→ 新規App：iOS・名前「ワークリレー」・言語 日本語・Bundle ID `com.gucchii.workrelay`・SKU 例 `workrelay`（Bundle IDが一覧に無ければ先に Developer サイトで Identifiers に登録）
+- [ ] [App Store Connect](https://appstoreconnect.apple.com/) → マイApp →「+」→ 新規App：iOS・名前「workRelay」・言語 日本語・Bundle ID `com.gucchii.workrelay`・SKU 例 `workrelay`（Bundle IDが一覧に無ければ先に Developer サイトで Identifiers に登録）
 - [ ] TestFlight →「内部テスト」にグループを作り、自分を追加。暗号化の質問は「いいえ（標準の暗号化のみ）」
 - [ ] Macに`$HOME/apps/work-relay`のチェックアウト・Xcode 27系・1Password CLI（`op`）のサインインがある（別の場所なら`MAC_REPO_DIR`）
 - [ ] 本番にマイグレーション（`native_auth_handoffs`）と`NATIVE_AUTH_ENCRYPTION_KEY`が入っている（`main`へのリリース後）
