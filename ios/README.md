@@ -18,7 +18,12 @@ Web/PWA・ショートカット・AndroidのWeb Share Targetはそのまま残�
 | 変えたもの | Web/PWA | iOSアプリ |
 |---|---|---|
 | 画面・機能（`src/`） | mainへマージ → 自動デプロイ | 何もしなくてよい（次に開いたとき新しい画面が出る） |
-| アプリの殻（`ios/WorkRelay`・`ios/WorkRelay.xcodeproj`） | 影響なし | TestFlightへ新しいビルドを上げる |
+| アプリの殻（`ios/WorkRelay`・`ios/WorkRelay.xcodeproj`・`ios/WorkRelay-Info.plist`） | 影響なし | TestFlightへ新しいビルドを上げる |
+
+**画面にカメラ・マイク・位置情報などを使う機能を足したら、`ios/WorkRelay-Info.plist`へ対応する利用目的
+（`NSCameraUsageDescription`等）も足す**（#326）。`src/`だけの変更でもWKWebViewはOSの権限を使うため、
+キーが無いとiOSはその操作の瞬間にアプリを強制終了する（PWA・Safariでは起きないので気付きにくい）。
+カメラのキーは`ios/scripts/check-consistency.mjs`（`pnpm test`）が照合する。
 
 ## 手作業（人の認証・判断が要るもの）
 
