@@ -1009,6 +1009,11 @@ versionが変わると、pushトリガーでdevelop→mainのPRが自動作成�
 `ios/`はSwiftUI + WKWebViewの薄い殻で、本番のワークリレーを開くだけ。**画面と機能はWeb版が正本**で、Web/PWA・
 ショートカット・AndroidのWeb Share Targetは変わらない。ビルド・配布・手作業・実機確認は[ios/README.md](../ios/README.md)。
 
+**TestFlight配布はGitHub Actions（macOSランナー）が自動で行う**（#336）。`deploy.yml`成功 → `ios-testflight-trigger.yml` →
+`ios-testflight.yml`（判定 → 署名・アーカイブ・アップロード → ASCでの処理待ち・内部グループ配布 → タグ`ios-testflight/<ビルド番号>`）。
+IssueDeck等と同じ流れで、認証はAPIキー（`ASC_KEY_ID`・`ASC_ISSUER_ID`・`ASC_KEY_P8`をマニフェスト経由でGitHubのsecretへ同期）。
+subpcからMacへSSHする手動方式（#317）は、ログインキーチェーンが閉じて署名が失敗する（#335）ため廃止した。
+
 ### Googleログインの引き継ぎ
 
 `ASWebAuthenticationSession`（エフェメラル）とWKWebViewはCookieを共有しないため、認証シートで確立した

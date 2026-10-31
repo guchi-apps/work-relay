@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- TestFlight（App Store Connect）向けの書き出し設定（#336）。ios-testflight.ymlが使う。IPAを書き出し、アップロードはaltoolで行う。 -->
 <plist version="1.0">
 <dict>
 	<key>method</key>
 	<string>app-store-connect</string>
 	<key>destination</key>
-	<string>upload</string>
+	<string>export</string>
 	<key>teamID</key>
 	<string>6AA3WFTR94</string>
 	<key>signingStyle</key>
