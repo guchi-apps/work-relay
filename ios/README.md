@@ -35,7 +35,7 @@ Web/PWA・ショートカット・AndroidのWeb Share Targetはそのまま残�
 - [ ] 本番にマイグレーション（`native_auth_handoffs`）と`NATIVE_AUTH_ENCRYPTION_KEY`が入っている（`main`へのリリース後）
 - [ ] 実機で最初のログインが通る（Supabaseの許可リダイレクトURLが`/auth/callback?native=1&…`のクエリ付きを弾く場合は、`https://research-desk.gucchii.com/auth/callback**`のようにワイルドカードを足す）
 
-App Store Connect API キーは**新しく作らず**、kurashioと共用（1Passwordの`apps/MyRoom`の`asc-key-id`・`asc-issuer-id`・`asc-key-p8`。`asc.env.tpl`が`op://`参照だけを持つ）。実値はどこにも書かない。
+App Store Connect API キーは**新しく作らず**、kurashioと共用（1Passwordの`apps/AppStoreConnect`の`key-id`・`issuer-id`・`key-p8`。`asc.env.tpl`が`op://`参照だけを持つ）。実値はどこにも書かない。
 
 ## ビルド方法（Mac + Xcode）
 
