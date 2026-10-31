@@ -504,7 +504,14 @@ AIDE側がマージされるまでエンドツーエンドの送信は動かな�
 - **画像圧縮・ZIP化はいずれも追加依存を最小限にしている。** リサイズ・JPEG化は
   `createImageBitmap()` + `<canvas>.toBlob()`というブラウザ標準APIのみで完結し、追加依存は
   ZIP化の`fflate`1つだけ（`src/lib/image-mail-client.ts`）。横幅の自動段階縮小（1200→900→600px）は、
-  ZIP作成後のサイズを見てから次の横幅で作り直す素朴なループで、事前見積もりはしない
+  JPEG化後のサイズの見積もりで1通に収まるかを見てから次の横幅で作り直すループ
+- **2MBを超えるときは複数のZIP・複数のメールに分けて送る（#332）。** 最後の横幅（自動は600px）でも
+  超える場合、`src/lib/image-mail-split.ts`の`planGroups()`が撮影順に先頭から詰めて2MB以下のグループに
+  分ける（見積もりが外れたら`buildParts()`が半分に割って作り直す）。画面は1通ずつ順に
+  `/api/image-mail/send`へ送り、`partIndex`/`partTotal`を付ける。サーバーは件名・ZIP添付名のタイトル末尾に
+  ` (1/3)`を足してAIDEへ転送するため、AIDE側の変更は要らない。重複送信防止の`idempotencyKey`は通ごとに
+  別で、失敗した通から再開しても送信済みの通は再送しない。1枚だけで2MBを超える写真は分割できず、
+  横幅を下げるよう案内するエラーにする
 - **送信APIは`/api/internal/*`と違う認証にしている。** `/api/internal/weekly-report`はAIDE→
   Research Desk方向（共有シークレット）だが、`/api/image-mail/send`はブラウザ→Research Desk
   サーバー方向のため`getCurrentUser()`によるSupabaseセッション認証を使う。Research Desk→AIDE

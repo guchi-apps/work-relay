@@ -1,4 +1,5 @@
 import { getCurrentUser } from "@/lib/auth";
+import { formatPartSuffix } from "@/lib/image-mail-split";
 import { buildImageMailZipFileName } from "@/lib/image-mail-zip-filename";
 import { json } from "@/lib/internal-auth";
 import { getSharedToken } from "@/lib/shared-token";
@@ -7,6 +8,7 @@ export const runtime = "nodejs";
 
 const MAX_TITLE_LENGTH = 200;
 const MAX_ZIP_SIZE_BYTES = 2 * 1024 * 1024;
+const MAX_PART_TOTAL = 30;
 const ALLOWED_WIDTHS = [1200, 900, 600];
 const REQUEST_TIMEOUT_MS = 30_000;
 
@@ -51,21 +53,29 @@ export async function POST(request: Request) {
   const imageCount = Number(form.get("imageCount"));
   const width = Number(form.get("width"));
   const zip = form.get("zip");
+  // 2MBを超えて複数通に分けて送るとき（#332）。無ければ1通だけの送信として扱う。
+  const partIndex = form.has("partIndex") ? Number(form.get("partIndex")) : 1;
+  const partTotal = form.has("partTotal") ? Number(form.get("partTotal")) : 1;
 
   if (typeof title !== "string" || !title.trim()) return json({ error: "invalid_request", message: "写真タイトルを入力してください" }, 400);
   if (title.length > MAX_TITLE_LENGTH) return json({ error: "invalid_request", message: `写真タイトルは${MAX_TITLE_LENGTH}文字までです` }, 400);
   if (typeof idempotencyKey !== "string" || !idempotencyKey.trim()) return json({ error: "invalid_request", message: "idempotencyKeyが必要です" }, 400);
   if (!Number.isInteger(imageCount) || imageCount < 1) return json({ error: "invalid_request", message: "imageCountが不正です" }, 400);
   if (!ALLOWED_WIDTHS.includes(width)) return json({ error: "invalid_request", message: "widthは1200・900・600のいずれかで指定してください" }, 400);
+  if (!Number.isInteger(partTotal) || partTotal < 1 || partTotal > MAX_PART_TOTAL || !Number.isInteger(partIndex) || partIndex < 1 || partIndex > partTotal) {
+    return json({ error: "invalid_request", message: "partIndex・partTotalが不正です" }, 400);
+  }
   if (!(zip instanceof Blob) || zip.size === 0) return json({ error: "invalid_request", message: "zipファイルが必要です" }, 400);
   if (zip.size > MAX_ZIP_SIZE_BYTES) return json({ error: "zip_too_large", message: "ZIPサイズが上限（2MB）を超えています" }, 400);
 
+  // 件名はAIDE側でタイトルの前に「[画像] 」が付くため、連番はタイトルの末尾に足す。
+  const sentTitle = `${title.trim()}${formatPartSuffix(partIndex, partTotal)}`;
   const forwardForm = new FormData();
-  forwardForm.set("title", title.trim());
+  forwardForm.set("title", sentTitle);
   forwardForm.set("imageCount", String(imageCount));
   forwardForm.set("width", String(width));
   forwardForm.set("idempotencyKey", idempotencyKey.trim());
-  forwardForm.set("zip", zip, buildImageMailZipFileName(title.trim(), new Date()));
+  forwardForm.set("zip", zip, buildImageMailZipFileName(sentTitle, new Date()));
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
