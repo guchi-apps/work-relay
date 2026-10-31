@@ -54,7 +54,7 @@ export function checkConsistency() {
 
   // Bundle ID・表示名
   if (!pbxproj.includes("PRODUCT_BUNDLE_IDENTIFIER = com.gucchii.workrelay;")) problems.push("Bundle ID が com.gucchii.workrelay ではありません");
-  if (!pbxproj.includes('INFOPLIST_KEY_CFBundleDisplayName = "ワークリレー";')) problems.push("表示名が ワークリレー ではありません");
+  if (!pbxproj.includes("INFOPLIST_KEY_CFBundleDisplayName = workRelay;")) problems.push("表示名が workRelay ではありません");
 
   // 戻り先スキームをOSへ登録する（CFBundleURLTypes）。生成Info.plistに部分plistを足す形で、Debug/Releaseの両方が指す。
   // 登録が無いと workrelay://auth-callback がアプリへ戻らず、Googleログインを完了できない
