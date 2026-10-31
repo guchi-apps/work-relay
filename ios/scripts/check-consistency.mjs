@@ -56,6 +56,19 @@ export function checkConsistency() {
   if (!pbxproj.includes("PRODUCT_BUNDLE_IDENTIFIER = com.gucchii.workrelay;")) problems.push("Bundle ID が com.gucchii.workrelay ではありません");
   if (!pbxproj.includes('INFOPLIST_KEY_CFBundleDisplayName = "ワークリレー";')) problems.push("表示名が ワークリレー ではありません");
 
+  // 戻り先スキームをOSへ登録する（CFBundleURLTypes）。生成Info.plistに部分plistを足す形で、Debug/Releaseの両方が指す。
+  // 登録が無いと workrelay://auth-callback がアプリへ戻らず、Googleログインを完了できない
+  const infoPlist = read("ios/WorkRelay-Info.plist");
+  const urlSchemes = infoPlist.match(/<key>CFBundleURLSchemes<\/key>\s*<array>([\s\S]*?)<\/array>/)?.[1] ?? "";
+  if (!swiftScheme || !urlSchemes.includes(`<string>${swiftScheme}</string>`)) {
+    problems.push(`WorkRelay-Info.plist の CFBundleURLSchemes に ${swiftScheme} がありません`);
+  }
+  const plistRefs = pbxproj.match(/INFOPLIST_FILE = "?WorkRelay-Info\.plist"?;/g)?.length ?? 0;
+  const configCount = pbxproj.match(/GENERATE_INFOPLIST_FILE = YES;/g)?.length ?? 0;
+  if (plistRefs !== configCount || configCount < 2) {
+    problems.push("Debug/Release の両方が INFOPLIST_FILE = WorkRelay-Info.plist を指していません");
+  }
+
   // 版番号（MARKETING_VERSION）が package.json の version と揃っている（sync-version.mjs で揃える）。
   // リリースのバンプPRで version が先に動くため、CI（pnpm test）では見ず、配布スクリプトだけが見る
   const { version } = JSON.parse(read("package.json"));
