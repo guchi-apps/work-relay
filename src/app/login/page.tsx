@@ -1,6 +1,15 @@
 import { BrandMark, Wordmark } from "@/components/BrandMark";
 
-export default function LoginPage() {
+const ERROR_MESSAGES: Record<string, string> = {
+  not_allowed: "このGoogleアカウントは利用が許可されていません",
+  auth_failed: "ログインに失敗しました。もう一度お試しください",
+};
+
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  // iOSアプリ（#317）の認証シートから戻った失敗を、WebViewのログイン画面に表示する
+  const { error } = await searchParams;
+  const message = error ? ERROR_MESSAGES[error] : undefined;
+
   return (
     <main className="login-shell">
       <div className="login-card">
@@ -25,6 +34,7 @@ export default function LoginPage() {
           </svg>
           Googleでログイン
         </a>
+        {message ? <p className="login-foot" role="alert">{message}</p> : null}
         <p className="login-foot">許可された Google アカウントのみ利用できます</p>
       </div>
     </main>
