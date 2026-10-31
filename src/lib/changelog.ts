@@ -29,6 +29,19 @@ export type ChangelogEntry = {
  */
 export const APP_CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.18.0",
+    date: "2026-10-31",
+    changes: [
+      "iPhone向けの「ワークリレー」アプリ（iOS）に対応しました。アプリからGoogleでログインでき、ログイン状態をアプリ内の画面へ引き継げます。引き継ぎコードを発行できない場合も、エラーにならずアプリへ失敗が伝わります。",
+    ],
+    usage: [
+      "1. iPhoneにTestFlight経由でワークリレーのアプリをインストールして開く。",
+      "2. ログイン画面でGoogleログインを選ぶ。",
+      "3. ブラウザで認証を終えるとアプリへ戻る。",
+      "4. 成功の目安: アプリ内でログイン済みの画面が表示される。",
+    ],
+  },
+  {
     version: "1.17.1",
     date: "2026-09-27",
     changes: [
