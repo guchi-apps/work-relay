@@ -254,6 +254,7 @@
 				DEVELOPMENT_TEAM = 6AA3WFTR94;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "WorkRelay-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "ワークリレー";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
@@ -288,6 +289,7 @@
 				DEVELOPMENT_TEAM = 6AA3WFTR94;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "WorkRelay-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "ワークリレー";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
