@@ -29,6 +29,15 @@ export type ChangelogEntry = {
  */
 export const APP_CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.18.1",
+    date: "2026-11-01",
+    changes: [
+      "iOSアプリで「写真を撮る」を使うとアプリが落ちる問題を直しました。",
+      "iOSアプリの表示名を「workRelay」に変更しました。",
+      "画像メールに付くZIPファイルの名前を「yymmdd タイトル」の形式にそろえました。",
+    ],
+  },
+  {
     version: "1.18.0",
     date: "2026-10-31",
     changes: [
