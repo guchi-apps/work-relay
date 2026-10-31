@@ -6,7 +6,7 @@ Web/PWA・ショートカット・AndroidのWeb Share Targetはそのまま残�
 
 | 項目 | 値 |
 |---|---|
-| 表示名 | ワークリレー |
+| 表示名 | workRelay |
 | Bundle ID | `com.gucchii.workrelay`（既存アプリ: issuedeck・kurashio・morrow・yoteiflow・AIDEiosと重ならない） |
 | 署名 | Automatic（Apple Developer Program のチーム `6AA3WFTR94`。他のiOSアプリと同じ） |
 | 対応 | iPhone・縦向き・iOS 18以上 |
@@ -18,13 +18,18 @@ Web/PWA・ショートカット・AndroidのWeb Share Targetはそのまま残�
 | 変えたもの | Web/PWA | iOSアプリ |
 |---|---|---|
 | 画面・機能（`src/`） | mainへマージ → 自動デプロイ | 何もしなくてよい（次に開いたとき新しい画面が出る） |
-| アプリの殻（`ios/WorkRelay`・`ios/WorkRelay.xcodeproj`） | 影響なし | TestFlightへ新しいビルドを上げる |
+| アプリの殻（`ios/WorkRelay`・`ios/WorkRelay.xcodeproj`・`ios/WorkRelay-Info.plist`） | 影響なし | TestFlightへ新しいビルドを上げる |
+
+**画面にカメラ・マイク・位置情報などを使う機能を足したら、`ios/WorkRelay-Info.plist`へ対応する利用目的
+（`NSCameraUsageDescription`等）も足す**（#326）。`src/`だけの変更でもWKWebViewはOSの権限を使うため、
+キーが無いとiOSはその操作の瞬間にアプリを強制終了する（PWA・Safariでは起きないので気付きにくい）。
+カメラのキーは`ios/scripts/check-consistency.mjs`（`pnpm test`）が照合する。
 
 ## 手作業（人の認証・判断が要るもの）
 
 実装とは別に、次は本人が行います（初回だけ）。
 
-- [ ] [App Store Connect](https://appstoreconnect.apple.com/) → マイApp →「+」→ 新規App：iOS・名前「ワークリレー」・言語 日本語・Bundle ID `com.gucchii.workrelay`・SKU 例 `workrelay`（Bundle IDが一覧に無ければ先に Developer サイトで Identifiers に登録）
+- [ ] [App Store Connect](https://appstoreconnect.apple.com/) → マイApp →「+」→ 新規App：iOS・名前「workRelay」・言語 日本語・Bundle ID `com.gucchii.workrelay`・SKU 例 `workrelay`（Bundle IDが一覧に無ければ先に Developer サイトで Identifiers に登録）
 - [ ] TestFlight →「内部テスト」にグループを作り、自分を追加。暗号化の質問は「いいえ（標準の暗号化のみ）」
 - [ ] Macに`$HOME/apps/work-relay`のチェックアウト・Xcode 27系・1Password CLI（`op`）のサインインがある（別の場所なら`MAC_REPO_DIR`）
 - [ ] 本番にマイグレーション（`native_auth_handoffs`）と`NATIVE_AUTH_ENCRYPTION_KEY`が入っている（`main`へのリリース後）

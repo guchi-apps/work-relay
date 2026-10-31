@@ -54,7 +54,7 @@ export function checkConsistency() {
 
   // Bundle ID・表示名
   if (!pbxproj.includes("PRODUCT_BUNDLE_IDENTIFIER = com.gucchii.workrelay;")) problems.push("Bundle ID が com.gucchii.workrelay ではありません");
-  if (!pbxproj.includes('INFOPLIST_KEY_CFBundleDisplayName = "ワークリレー";')) problems.push("表示名が ワークリレー ではありません");
+  if (!pbxproj.includes("INFOPLIST_KEY_CFBundleDisplayName = workRelay;")) problems.push("表示名が workRelay ではありません");
 
   // 戻り先スキームをOSへ登録する（CFBundleURLTypes）。生成Info.plistに部分plistを足す形で、Debug/Releaseの両方が指す。
   // 登録が無いと workrelay://auth-callback がアプリへ戻らず、Googleログインを完了できない
@@ -62,6 +62,11 @@ export function checkConsistency() {
   const urlSchemes = infoPlist.match(/<key>CFBundleURLSchemes<\/key>\s*<array>([\s\S]*?)<\/array>/)?.[1] ?? "";
   if (!swiftScheme || !urlSchemes.includes(`<string>${swiftScheme}</string>`)) {
     problems.push(`WorkRelay-Info.plist の CFBundleURLSchemes に ${swiftScheme} がありません`);
+  }
+  // 画面の「写真を撮る」（<input type="file" capture>）はWKWebViewがカメラを起動する。
+  // NSCameraUsageDescription が無いとiOSはその場でアプリを強制終了する（#326）
+  if (!/<key>NSCameraUsageDescription<\/key>\s*<string>[^<]+<\/string>/.test(infoPlist)) {
+    problems.push("WorkRelay-Info.plist に NSCameraUsageDescription がありません（カメラ起動でクラッシュする）");
   }
   const plistRefs = pbxproj.match(/INFOPLIST_FILE = "?WorkRelay-Info\.plist"?;/g)?.length ?? 0;
   const configCount = pbxproj.match(/GENERATE_INFOPLIST_FILE = YES;/g)?.length ?? 0;
