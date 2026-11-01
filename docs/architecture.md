@@ -505,7 +505,9 @@ AIDE側がマージされるまでエンドツーエンドの送信は動かな�
   `createImageBitmap()` + `<canvas>.toBlob()`というブラウザ標準APIのみで完結し、追加依存は
   ZIP化の`fflate`1つだけ（`src/lib/image-mail-client.ts`）。縮小は**短辺基準**（#340。
   `src/lib/image-mail-resize.ts`の`computeResizedSize()`。縦横比を保ち、拡大はしない）。短辺は800／1200／1600pxから
-  選び、既定は1200px。3MBを超えても短辺を自動で下げず、分割送信で吸収する。送信フォームのキー名は互換のため`width`のまま
+  選び、既定は1200px。3MBを超えても短辺を自動で下げず、分割送信で吸収する。送信フォームのキー名は互換のため`width`のまま。
+  サーバー（`/api/image-mail/send`）は短辺を選択肢で拒否せず、1〜10000の整数なら受けてAIDEへそのまま転送する（#357）。
+  **AIDE側（`aide/src/api/image-mail.ts`の`ALLOWED_WIDTHS`）が1200/900/600しか受けない間は、800の送信がAIDEの400（`width は 1200 / 900 / 600 のいずれかで…`）で失敗する**
 - **3MBを超えるときは複数のZIP・複数のメールに分けて送る（#332）。** 選んだ短辺のままで
   超える場合、`src/lib/image-mail-split.ts`の`planGroups()`が撮影順に先頭から詰めて3MB以下のグループに
   分ける（見積もりが外れたら`buildParts()`が半分に割って作り直す）。画面は1通ずつ順に
