@@ -1,5 +1,6 @@
 "use client";
 
+import { sortBusinesses, type BusinessDef } from "@/lib/business-defs";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { JobStatusValue } from "@/lib/analysis-job-rules";
@@ -13,7 +14,6 @@ import {
   MAX_SUBJECT_BODY_LENGTH,
   SUBJECT_PREFIX,
   toNewsMailArticle,
-  type MailBusiness,
   type NewsMailArticleDto,
   type NewsMailBrief,
 } from "@/lib/news-mail";
@@ -30,6 +30,8 @@ export type NewsMailBriefView = {
 };
 
 type Props = {
+  /** 事業区分のマスタ（並び順・名前・補足・色）。 */
+  businesses: BusinessDef[];
   rows: NewsMailRow[];
   weekOffset: number;
   basis: WeekBasisParam;
@@ -46,9 +48,6 @@ type Props = {
 
 type SendResult = { ok: true; articleCount: number; hasBrief: boolean } | { ok: false; message: string };
 
-const BUSINESS_ORDER: MailBusiness[] = ["DELIVERY", "LOCKER"];
-const BUSINESS_LABELS: Record<MailBusiness, string> = { DELIVERY: "宅配事業", LOCKER: "ロッカー事業" };
-const BUSINESS_HINTS: Record<MailBusiness, string> = { DELIVERY: "戸建て · 宅配ボックス · 機能門柱 · 外構", LOCKER: "マルチロッカー · セルフ発送 · 競合・類似サービス" };
 const IMPORTANCE_LABELS = { HIGH: "高", MEDIUM: "中", REFERENCE: "参考" } as const;
 
 /** 総括を待っている間の再読み込み間隔。解析は数分かかるので短くしても意味がない。 */
@@ -65,7 +64,7 @@ const BRIEF_POLL_MS = 30_000;
  * 一覧はチェックの状態でプレビューが変わるため、`TriageInbox`（#94）と違って選択状態を
  * Reactのstateで持つ。1週ぶんの記事は多くても数十件なので、この規模で問題にならない。
  */
-export default function NewsMailPanel({ rows, weekOffset, basis, weekStartIso, weekEndIso, brief, defaultSubjectBody, analysisQueue, pickedArticleId = null }: Props) {
+export default function NewsMailPanel({ businesses, rows, weekOffset, basis, weekStartIso, weekEndIso, brief, defaultSubjectBody, analysisQueue, pickedArticleId = null }: Props) {
   const router = useRouter();
   const range = useMemo(() => ({ start: new Date(weekStartIso), end: new Date(weekEndIso) }), [weekStartIso, weekEndIso]);
   const adoptedIds = useMemo(() => rows.filter((row) => row.triage === "adopted").map((row) => row.article.id), [rows]);
@@ -117,15 +116,15 @@ export default function NewsMailPanel({ rows, weekOffset, basis, weekStartIso, w
   }
 
   const selectedArticles = useMemo(() => rows.filter((row) => selected.has(row.article.id)).map((row) => toNewsMailArticle(row.article)), [rows, selected]);
-  const counts = useMemo(() => countNewsMailArticles(selectedArticles, range), [selectedArticles, range]);
+  const counts = useMemo(() => countNewsMailArticles(selectedArticles, range, businesses), [selectedArticles, range, businesses]);
 
   const briefForMail: NewsMailBrief | null = brief && brief.status === "COMPLETED" && brief.headline && brief.overview ? { headline: brief.headline, overview: brief.overview, topics: brief.topics } : null;
 
   const previewHtml = useMemo(
-    () => buildNewsMailHtml({ range, subjectBody, articles: selectedArticles, brief: briefForMail }),
+    () => buildNewsMailHtml({ range, subjectBody, articles: selectedArticles, brief: briefForMail, businesses }),
     // briefForMailは毎レンダーで作り直されるオブジェクトなので、中身が変わったときだけ作り直す。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [range, subjectBody, selectedArticles, brief?.status, brief?.headline, brief?.overview, brief?.topics],
+    [range, subjectBody, selectedArticles, businesses, brief?.status, brief?.headline, brief?.overview, brief?.topics],
   );
 
   const unanalyzedIds = useMemo(() => rows.filter((row) => selected.has(row.article.id) && !row.article.analyzed).map((row) => row.article.id), [rows, selected]);
@@ -251,7 +250,8 @@ export default function NewsMailPanel({ rows, weekOffset, basis, weekStartIso, w
       {rows.length === 0 ? (
         <div className="no-results">この週に送れる記事がありません。週や「対象の取り方」を変えてお試しください。</div>
       ) : (
-        BUSINESS_ORDER.map((business) => {
+        sortBusinesses(businesses).map((def) => {
+          const business = def.key;
           const items = rows.filter((row) => row.article.business === business);
           if (items.length === 0) return null;
           const picked = items.filter((row) => selected.has(row.article.id)).length;
@@ -259,13 +259,13 @@ export default function NewsMailPanel({ rows, weekOffset, basis, weekStartIso, w
             <section className="news-section" key={business}>
               <div className="section-heading section-line">
                 <div className="section-title">
-                  <i className={business === "LOCKER" ? "orange" : ""} />
-                  <h2>{BUSINESS_LABELS[business]}</h2>
+                  <i className={def.color === "teal" ? "" : def.color} />
+                  <h2>{def.label}</h2>
                   <span>
                     {items.length}件中 {picked}件を選択
                   </span>
                 </div>
-                <p>{BUSINESS_HINTS[business]}</p>
+                <p>{def.hint}</p>
               </div>
               <div className="news-list">
                 {items.map((row) => (

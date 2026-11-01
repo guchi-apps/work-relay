@@ -13,11 +13,12 @@
 // `@/`のエイリアスは`node --test`の実行時には解決されないため、相対パス＋拡張子で書く。
 import { formatIsoDate, formatWeekLabel } from "./jst-week.ts";
 import type { WeekRange } from "./jst-week.ts";
+import { DEFAULT_BUSINESSES, businessLabel, businessShortLabel, sortBusinesses, type BusinessDef } from "./business-defs.ts";
 
 /** 総括の対象としてプロンプトへ載せる記事。画面でチェックが入っていたものだけを渡す。 */
 export type WeeklyBriefArticle = {
   title: string;
-  business: "DELIVERY" | "LOCKER";
+  business: string;
   sourceName: string;
   isPrimarySource: boolean;
   importance: "HIGH" | "MEDIUM" | "REFERENCE";
@@ -36,13 +37,12 @@ export const MAX_BRIEF_TOPICS = 4;
 /** 1件あたりの要約をプロンプトへ載せる上限。記事が増えても1回の実行が枠を食い潰さないよう切る。 */
 export const BRIEF_SUMMARY_LIMIT = 400;
 
-const BUSINESS_LABELS = { DELIVERY: "宅配事業", LOCKER: "ロッカー事業" } as const;
 const IMPORTANCE_LABELS = { HIGH: "高", MEDIUM: "中", REFERENCE: "参考" } as const;
 
-function articleLine(article: WeeklyBriefArticle, index: number): string {
+function articleLine(article: WeeklyBriefArticle, index: number, businesses: readonly BusinessDef[]): string {
   const published = article.publishedAt ? formatIsoDate(article.publishedAt) : "公開日不明";
   const lines = [
-    `${index + 1}. [${BUSINESS_LABELS[article.business]}] ${article.title}`,
+    `${index + 1}. [${businessLabel(businesses, article.business)}] ${article.title}`,
     `   ${published}（取得 ${formatIsoDate(article.collectedAt)}） / ${article.sourceName} / ${article.isPrimarySource ? "一次情報" : "関連記事"} / 重要度 ${IMPORTANCE_LABELS[article.importance]}`,
   ];
   if (article.summary) lines.push(`   要約: ${article.summary.slice(0, BRIEF_SUMMARY_LIMIT)}`);
@@ -56,11 +56,11 @@ function articleLine(article: WeeklyBriefArticle, index: number): string {
  * 記事1件ずつの解析と違い、ここで欲しいのは**横断の見立て**なので、個々の記事の要約を
  * 繰り返させない。出力の形はJSON Schemaで縛るため、キー名の列挙はしない。
  */
-export function buildWeeklyBriefPrompt(range: WeekRange, articles: WeeklyBriefArticle[]): string {
-  const delivery = articles.filter((article) => article.business === "DELIVERY").length;
-  const locker = articles.length - delivery;
+export function buildWeeklyBriefPrompt(range: WeekRange, articles: WeeklyBriefArticle[], businesses: BusinessDef[] = DEFAULT_BUSINESSES): string {
+  const defs = sortBusinesses(businesses);
+  const countsText = defs.map((def) => `${businessShortLabel(defs, def.key)} ${articles.filter((article) => article.business === def.key).length}件`).join(" ／ ");
   return [
-    "あなたは戸建て・集合住宅向けの宅配ボックス／機能門柱と、マルチロッカー事業を手がけるメーカーの商品企画担当を支援するリサーチャーです。",
+    "あなたは戸建て・集合住宅向けのエクステリア（宅配ボックス・ポスト・機能門柱）とマルチロッカー事業を手がけ、生成AI（Gemini・Copilot）の業務活用も追うメーカーの商品企画担当を支援するリサーチャーです。",
     `以下は${formatWeekLabel(range)}の業界ニュースのうち、担当者が「社内へ共有する」と選んだ記事の一覧です。`,
     "これらを横断して読み、週報メールの冒頭に置く総括を書いてください。指定されたJSON Schemaに合うJSONだけを最終応答として返し、説明文・前置き・コードフェンスは付けないでください。",
     "",
@@ -72,9 +72,9 @@ export function buildWeeklyBriefPrompt(range: WeekRange, articles: WeeklyBriefAr
     "",
     "事実に無いことを足さないでください。一覧に書かれていないことは書かず、断定できないものは「〜とみられる」と書きます。",
     "",
-    `## 対象の記事（宅配 ${delivery}件 ／ ロッカー ${locker}件）`,
+    `## 対象の記事（${countsText}）`,
     "",
-    articles.length > 0 ? articles.map(articleLine).join("\n") : "（対象の記事がありません）",
+    articles.length > 0 ? articles.map((article, index) => articleLine(article, index, defs)).join("\n") : "（対象の記事がありません）",
   ].join("\n");
 }
 

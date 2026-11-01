@@ -52,7 +52,7 @@ const DUMMY_COLLECTION_RUN = {
 
 const DUMMY_INDUSTRY_INFORMATION = [
   {
-    business: "DELIVERY",
+    business: "EXTERIOR",
     informationType: "NEW_PRODUCT",
     title: "戸建て向け宅配ボックスの新商品発表（サンプル）",
     originalUrl: "https://example.com/delivery/new-product",
@@ -68,7 +68,7 @@ const DUMMY_INDUSTRY_INFORMATION = [
     targetCompany: "サンプル住宅設備株式会社",
     targetProduct: "戸建て向け宅配ボックス",
     keywords: ["宅配ボックス", "戸建て", "新商品"],
-    tags: ["宅配事業", "商品企画"],
+    tags: ["エクステリア事業", "商品企画"],
     periodScope: "IN_SCOPE",
   },
   {

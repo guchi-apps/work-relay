@@ -1,5 +1,6 @@
 import { getCurrentUser } from "@/lib/auth";
 import { normalizeUrl } from "@/lib/collection";
+import { getBusinesses, normalizeBusinessKey } from "@/lib/businesses";
 import { fitsNormalizedUrlColumn } from "@/lib/collection-rules";
 import { json } from "@/lib/internal-auth";
 import { buildNewsMailPickPath, isHttpUrl, SHARE_TITLE_MAX_LENGTH } from "@/lib/share-inbox";
@@ -28,7 +29,7 @@ export async function POST(request: Request) {
   const url = typeof input.url === "string" ? input.url.trim() : "";
   const title = typeof input.title === "string" ? input.title.trim() : "";
   const text = typeof input.text === "string" ? input.text.trim().slice(0, MAX_TEXT_LENGTH) : "";
-  const business = input.business === "DELIVERY" || input.business === "LOCKER" ? (input.business as SharedArticleBusiness) : null;
+  const business: SharedArticleBusiness | null = normalizeBusinessKey(await getBusinesses(), input.business);
 
   if (!url || !isHttpUrl(url)) return json({ error: "invalid_url", message: "記事のURLを確認してください" }, 400);
   if (!fitsNormalizedUrlColumn(normalizeUrl(url))) return json({ error: "url_too_long", message: "URLが長すぎるため登録できません" }, 400);

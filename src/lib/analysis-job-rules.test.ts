@@ -92,6 +92,6 @@ describe("週報候補からの自動除外", () => {
   });
 
   it("対象内と判定された記事は外さない", () => {
-    assert.equal(shouldAutoExcludeFromWeekly("DELIVERY", null), false);
+    assert.equal(shouldAutoExcludeFromWeekly("EXTERIOR", null), false);
   });
 });

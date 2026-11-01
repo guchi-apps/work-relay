@@ -5,7 +5,7 @@ import { normalizeUrl } from "@/lib/collection";
 import { prisma } from "@/lib/db";
 import { getTriageState, type TriageState } from "@/lib/triage";
 
-export type SharedArticleBusiness = "DELIVERY" | "LOCKER";
+export type SharedArticleBusiness = string;
 
 export type SharedArticleSummary = {
   id: string;

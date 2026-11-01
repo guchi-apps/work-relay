@@ -4,6 +4,7 @@ import HeaderUserMenu from "@/components/HeaderUserMenu";
 import NewsMailPanel, { type NewsMailRow } from "@/components/NewsMailPanel";
 import { getAnalysisOverview } from "@/lib/article-analysis";
 import { getCurrentUser } from "@/lib/auth";
+import { businessParam, getBusinesses, parseBusinessParam } from "@/lib/businesses";
 import {
   formatWeekLabel,
   getWeekRange,
@@ -50,7 +51,8 @@ export default async function NewsMailPage({ searchParams }: { searchParams: Pro
   const params = await searchParams;
   const weekOffset = parseWeekOffset(params.week, DEFAULT_WEEK_OFFSET);
   const basis = parseWeekBasis(params.basis);
-  const business: BusinessParam = params.business === "delivery" || params.business === "locker" ? params.business : "all";
+  const businesses = await getBusinesses();
+  const business: BusinessParam = parseBusinessParam(businesses, params.business);
   const importance: ImportanceParam = params.importance === "high" || params.importance === "medium" || params.importance === "reference" ? params.importance : "all";
   const triage: MailTriageParam = parseMailTriageParam(params.triage);
   const keyword = typeof params.keyword === "string" ? params.keyword.trim() : "";
@@ -136,8 +138,11 @@ export default async function NewsMailPage({ searchParams }: { searchParams: Pro
           事業区分
           <select name="business" defaultValue={business}>
             <option value="all">すべて</option>
-            <option value="delivery">宅配事業</option>
-            <option value="locker">ロッカー事業</option>
+            {businesses.map((def) => (
+              <option key={def.key} value={businessParam(def.key)}>
+                {def.label}
+              </option>
+            ))}
           </select>
         </label>
         <label>
@@ -165,6 +170,7 @@ export default async function NewsMailPage({ searchParams }: { searchParams: Pro
       </form>
 
       <NewsMailPanel
+        businesses={businesses}
         rows={rows}
         weekOffset={weekOffset}
         basis={basis}

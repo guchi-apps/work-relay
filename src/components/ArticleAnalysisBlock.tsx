@@ -1,5 +1,6 @@
 import ArticleAnalysisActions from "@/components/ArticleAnalysisActions";
-import { ANALYSIS_STATUS_CLASS, ANALYSIS_STATUS_LABELS, FAILURE_KIND_LABELS, formatConfidence, RELEVANCE_LABELS } from "@/lib/analysis-display";
+import { ANALYSIS_STATUS_CLASS, ANALYSIS_STATUS_LABELS, FAILURE_KIND_LABELS, formatConfidence, relevanceLabel } from "@/lib/analysis-display";
+import type { BusinessDef } from "@/lib/business-defs";
 import { formatDateTime, type IndustryInformationListItem } from "@/lib/industry-information";
 import { getTriageState, TRIAGE_CLASS, TRIAGE_LABELS } from "@/lib/triage";
 
@@ -10,7 +11,7 @@ import { getTriageState, TRIAGE_CLASS, TRIAGE_LABELS } from "@/lib/triage";
  * 判定理由を出す。人が確定済みの記事は「人が確定」と表示し、AIの判定と区別できるようにする。
  * 仕分けの状態（未判定／採用／不採用、#94）の札もここに出す。
  */
-export default function ArticleAnalysisBlock({ item }: { item: IndustryInformationListItem }) {
+export default function ArticleAnalysisBlock({ item, businesses }: { item: IndustryInformationListItem; businesses: BusinessDef[] }) {
   const job = item.analysisJobs[0] ?? null;
   const analysis = item.analyses[0] ?? null;
   const status = item.analysisStatus;
@@ -30,7 +31,7 @@ export default function ArticleAnalysisBlock({ item }: { item: IndustryInformati
             {status === "COMPLETED" && item.analyzedAt ? ` ${formatDateTime(item.analyzedAt)}` : ""}
           </span>
         )}
-        {analysis && <span className="verdict">{RELEVANCE_LABELS[analysis.relevance]}</span>}
+        {analysis && <span className="verdict">{relevanceLabel(businesses, analysis.relevance)}</span>}
         {analysis && <span className="conf">信頼度 {formatConfidence(analysis.confidence)}</span>}
         {analysis && <span className={`by ${reviewed ? "human" : "ai"}`}>{reviewed ? "人が確定" : "AI判定"}</span>}
         <span className={`chip ${TRIAGE_CLASS[triage]}`}>{TRIAGE_LABELS[triage]}</span>

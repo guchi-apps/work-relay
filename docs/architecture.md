@@ -69,7 +69,7 @@ car-care・db-consoleと同じ。`?next=`のようなクエリ由来の戻り先
 ## データベース
 
 `Clip` は汎用クリップの配線確認用として残し、業界情報は `IndustryInformation` に分離する。
-業界情報には `DELIVERY`（宅配）または `LOCKER`（ロッカー）を必須で持たせ、情報区分、重要度、
+業界情報には 事業区分（`business`。`EXTERIOR`＝エクステリア〔宅配・ポスト〕／`LOCKER`＝ロッカー／`AI`＝AI関連〔Gemini・Copilot〕）を必須で持たせ、情報区分、重要度、
 公開日／発生日、収集日時、本文、要約、取得数値、企画への示唆、対象企業・商品、キーワード／タグ、
 対象期間の区分を保存する。数値とキーワード／タグは、後続の収集処理で項目が増えても移行なしで
 保持できるよう JSON とする。
@@ -117,7 +117,7 @@ Research Deskの認証情報はChatGPTへ露出しない。
 `upsertIndustryInformationEvent()`（#43。自動収集の`runDailyCollection()`とも共通）に委ね、
 完全URL一致は従来どおり冪等に扱い、URLが異なっていても同一イベントと判定した記事は新規作成せず
 既存記事へ統合・上書き更新する。登録結果は`CollectionRun`に保存し、新規・統合更新・重複・除外の
-件数と`DELIVERY`／`LOCKER`別の件数を返す（`mergedCount`・`excludedCount`はレスポンスへの追加
+件数と事業区分別の件数を返す（`mergedCount`・`excludedCount`はレスポンスへの追加
 フィールドで、AIDE側の契約は後方互換）。レート制限はプロセス内で認証済みクライアントごとに1分20回
 までとするため、複数プロセス環境ではリバースプロキシ側の制限も併用する。シークレットと入力本文は
 ログへ出さない。
@@ -304,7 +304,7 @@ Prismaが出せるJSON列の条件が完全一致までのためで、`ロッカ
 
 ## 日次収集とイベント統合（#43）
 
-宅配・ロッカー業界情報の自動収集は`src/lib/collection.ts`の`runDailyCollection()`
+事業区分（エクステリア・ロッカー・AI関連）の業界情報の自動収集は`src/lib/collection.ts`の`runDailyCollection()`
 （元は週次のみの`runWeeklyCollection()`）が担当し、毎日05:00 JSTの`collection-daily.yml`が
 `POST /api/collection/daily`を叩く（元は20:00 JSTだったが、#216でChatGPT定期タスクが動いていた
 時刻に揃えた）。`targetFrom`は「今週（JST日曜0時始まり）の開始」に固定する
@@ -913,12 +913,12 @@ VPSのポーラー → claim（kind: "collection_search"）→ codex exec ＋ We
   失敗の分類（時間切れ・ログイン切れ・利用枠・出力不正）は記事解析と同じ`classifyFailure()`
 
 **収集プロンプトの初期値はaideの`docs/chatgpt-mcp.md`の指示例（事業ごと5件・7日→30日拡張・示唆と数値の
-付与）と、記事解析と共通の事業の観点（`DELIVERY_SCOPE`・`LOCKER_SCOPE`）から組んだもの。** ChatGPT側で
+付与）と、記事解析と共通の事業の観点（`industry_business.scope`）から組んだもの。** ChatGPT側で
 実際に使っているプロンプトが手に入ったら`buildCollectionSearchPrompt()`を差し替える。
 
 ### 検索・判定基準は事業ごとに、不採用記事と利用者の指示から更新する（#211で事業別化）
 
-`CollectionSearchPolicy`はAIが使う検索・採用／不採用の判定基準を事業（`business`＝`DELIVERY`／`LOCKER`）ごとに
+`CollectionSearchPolicy`はAIが使う検索・採用／不採用の判定基準を事業区分（`business`＝`industry_business.key`）ごとに
 1件ずつ保持する（主キーは`business`。#206時点はid固定1件のグローバル単一だった）。設定画面では事業ごとに
 基準・最終更新日時のカードを表示し、利用者は事業ごとに不自然な検索結果を文章で指示する。次の収集ジョブは、
 その指示と人が不採用にした直近10件の記事題名（事業ごとに絞り込み）をプロンプトへ渡し、Codexが返す
@@ -941,8 +941,7 @@ VPSのポーラー → claim（kind: "collection_search"）→ codex exec ＋ We
 
 - RSS収集（`runDailyCollection()`）が使う検索クエリ（`src/lib/collection.ts`の`FEEDS`。`query`フィールドを
   画面表示にも流用し、`url`はそこから組み立てる）
-- 収集ジョブ・記事解析が共通で使う「対象範囲」の語句（`src/lib/analysis-prompt.ts`の`DELIVERY_SCOPE`・
-  `LOCKER_SCOPE`）
+- 収集ジョブ・記事解析が共通で使う「対象範囲」の語句（`industry_business.scope`）
 
 「判定基準」（採用可否の傾向）と「検索キーワード／対象範囲」（何を検索するかの切り口）は別の層であり、
 前者だけがAIによる自動調整・利用者からの指示の対象になる。この二層構造は#206の時点から変わっていない。
@@ -1057,3 +1056,20 @@ iPhoneの共有シートに「workRelay」を出し、写真（最大20枚）・
 
 `ios/scripts/check-consistency.mjs`が、App Group・Bundle ID・上限値（枚数・合計サイズ）の食い違いと、`ShareImporter.swift`が
 `Authorization`を使っていないことを照合する。
+
+## 事業区分のマスタ（`industry_business`）
+
+事業区分（エクステリア／ロッカー／AI関連）はenumではなく`industry_business`テーブルが正で、
+表示名（`label`/`shortLabel`）・補足（`hint`）・AIに渡す対象範囲（`scope`）・判定基準の初期値
+（`defaultPolicy`）・色（`color`）・並び順（`sortOrder`）・RSSの検索クエリ（`feeds` JSON）を持つ。
+`IndustryInformation.business`・`CollectionSearchPolicy.business`はこのテーブルの`key`への外部キー、
+`ArticleAnalysis.relevance`は`key`か`OUT_OF_SCOPE`の文字列。
+
+- 読み出しは`src/lib/businesses.ts`の`getBusinesses()`。型と純粋な関数（検証・ラベル・並び順）は
+  Prismaに触れない`src/lib/business-defs.ts`に分け、`node --test`・ブラウザ側のメール組み立てからも使う。
+  初期値`DEFAULT_BUSINESSES`はマイグレーション`20261101120000_industry_business_master`の投入値と揃える
+- 区分を足すには`industry_business`へ行を足す（検索クエリ・対象範囲・判定基準もその行に入る）。
+  色は`teal`/`orange`/`violet`のいずれか（CSSは`globals.css`）
+- 旧`DELIVERY`はマイグレーションで`EXTERIOR`へ移した。AIDE（`/api/internal/weekly-report`）と
+  iOS共有（`/api/articles/shared`）が送る旧値は`normalizeBusinessKey()`が`EXTERIOR`に読み替える
+- 収集ジョブの出力は区分名をキーにできないため、次回の判定基準は`nextPolicies: [{business, policy}]`の配列で受ける

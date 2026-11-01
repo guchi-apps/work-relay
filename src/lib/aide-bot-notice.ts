@@ -61,7 +61,7 @@ export async function notifyNewCandidates(
         kind: "weekly-collection",
         dedupeKey: weekDedupeKey(result.targetFrom),
         title: "業界情報の日次収集が完了",
-        body: `宅配・ロッカー業界の日次収集が完了しました。新規${result.insertedCount}件・更新${result.mergedCount}件です。`,
+        body: `エクステリア・ロッカー・AI関連の日次収集が完了しました。新規${result.insertedCount}件・更新${result.mergedCount}件です。`,
         url: listUrl,
         priority: "NORMAL",
         expiresAt: new Date(Date.now() + EXPIRES_AFTER_MS).toISOString(),
