@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { formatPartSuffix } from "@/lib/image-mail-split";
+import { createThumbnailUrl, readNetworkHint, shouldSkipThumbnails } from "@/lib/image-mail-thumbnail";
 import { DEFAULT_WIDTH, WIDTH_PRESETS, buildImageMailZip, type ImageMailZipResult, type WidthPreset } from "@/lib/image-mail-client";
 
 type ShareNotice = { kind: "received"; count: number } | { kind: "error"; message: string };
@@ -25,7 +26,10 @@ type SendResult = { ok: true } | { ok: false; message: string };
 interface SelectedImage {
   id: string;
   file: File;
-  previewUrl: string;
+  /** 縮小サムネイルのBlob URL。元画像は表示しない（#349）。 */
+  previewUrl: string | null;
+  /** pending=作成待ち / loading=作成中 / ready=表示可 / skipped=低速のため省略 / failed=作成失敗 */
+  thumb: "pending" | "loading" | "ready" | "skipped" | "failed";
 }
 
 const PART_STATUS_LABELS: Record<PartStatus, string> = { waiting: "待機中", sending: "送信中…", done: "送信済み", failed: "失敗" };
@@ -54,11 +58,41 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
   const captureInputRef = useRef<HTMLInputElement>(null);
   const pickInputRef = useRef<HTMLInputElement>(null);
 
+  // サムネイルは1枚ずつ、画面の描画が落ち着いてから作る。ZIP作成・送信ボタンの操作を邪魔しない（#349）。
+  const thumbBusyRef = useRef(false);
+  const imagesRef = useRef<SelectedImage[]>([]);
+  imagesRef.current = images;
+  useEffect(() => {
+    if (thumbBusyRef.current) return;
+    const next = images.find((image) => image.thumb === "pending");
+    if (!next) return;
+    thumbBusyRef.current = true;
+    const run = async () => {
+      let url: string | null = null;
+      try {
+        url = await createThumbnailUrl(next.file);
+      } catch {
+        url = null;
+      }
+      thumbBusyRef.current = false;
+      setImages((current) => {
+        if (!current.some((image) => image.id === next.id)) {
+          if (url) URL.revokeObjectURL(url);
+          return current;
+        }
+        return current.map((image) => (image.id === next.id ? { ...image, previewUrl: url, thumb: url ? "ready" : "failed" } : image));
+      });
+    };
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number };
+    if (w.requestIdleCallback) w.requestIdleCallback(() => void run(), { timeout: 1500 });
+    else setTimeout(() => void run(), 50);
+  }, [images]);
+
   useEffect(() => {
     return () => {
-      for (const image of images) URL.revokeObjectURL(image.previewUrl);
+      for (const image of imagesRef.current) if (image.previewUrl) URL.revokeObjectURL(image.previewUrl);
     };
-  }, [images]);
+  }, []);
 
   // 共有された写真（#144）はサーバーのメモリに一時的に置かれている。受け取ると向こうからは消える。
   // `?shared=`が無くても問い合わせるのは、ログインし直してから開いた場合にも拾うため。
@@ -105,7 +139,8 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
 
   function addFiles(fileList: FileList | File[] | null) {
     if (!fileList || fileList.length === 0) return;
-    const added = Array.from(fileList).map((file) => ({ id: crypto.randomUUID(), file, previewUrl: URL.createObjectURL(file) }));
+    const skip = shouldSkipThumbnails(readNetworkHint());
+    const added: SelectedImage[] = Array.from(fileList).map((file) => ({ id: crypto.randomUUID(), file, previewUrl: null, thumb: skip ? "skipped" : "pending" }));
     setImages((current) => [...current, ...added]);
     resetOutcome();
   }
@@ -113,7 +148,7 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
   function removeImage(id: string) {
     setImages((current) => {
       const target = current.find((image) => image.id === id);
-      if (target) URL.revokeObjectURL(target.previewUrl);
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
       return current.filter((image) => image.id !== id);
     });
     resetOutcome();
@@ -236,13 +271,26 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
         <input ref={captureInputRef} type="file" accept="image/*" capture="environment" hidden onChange={(event) => { addFiles(event.target.files); event.target.value = ""; }} />
         <input ref={pickInputRef} type="file" accept="image/*" multiple hidden onChange={(event) => { addFiles(event.target.files); event.target.value = ""; }} />
         {images.length > 0 && (
-          <div className="imgmail-thumbs">
-            {images.map((image) => (
-              <div key={image.id} className="thumb" style={{ backgroundImage: `url(${image.previewUrl})`, backgroundSize: "cover", backgroundPosition: "center" }}>
-                <button type="button" aria-label={`${image.file.name}を削除`} onClick={() => removeImage(image.id)}>×</button>
-              </div>
-            ))}
-          </div>
+          <>
+            <div className="imgmail-thumbs">
+              {images.map((image) => (
+                <div
+                  key={image.id}
+                  className={`thumb ${image.thumb === "pending" || image.thumb === "loading" ? "loading" : ""}`}
+                  style={image.previewUrl ? { backgroundImage: `url(${image.previewUrl})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
+                >
+                  {(image.thumb === "skipped" || image.thumb === "failed") && (
+                    <button type="button" className="thumb-load" disabled={image.thumb === "failed"} onClick={() => setImages((current) => current.map((item) => (item.id === image.id ? { ...item, thumb: "pending" } : item)))}>
+                      <span>{image.file.name}</span>
+                      {image.thumb === "skipped" && <small>タップで表示</small>}
+                    </button>
+                  )}
+                  <button type="button" aria-label={`${image.file.name}を削除`} onClick={() => removeImage(image.id)}>×</button>
+                </div>
+              ))}
+            </div>
+            {images.some((image) => image.thumb === "skipped") && <p className="helper">通信が遅いため、一部のプレビューを省略しました。送信には影響しません。</p>}
+          </>
         )}
       </div>
 
