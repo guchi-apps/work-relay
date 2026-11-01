@@ -196,7 +196,7 @@ async function loadBriefArticles(articleIds: string[]): Promise<WeeklyBriefArtic
   if (articleIds.length === 0) return [];
   const articles = await prisma.industryInformation.findMany({
     where: { id: { in: articleIds } },
-    orderBy: [{ business: "asc" }, { importance: "asc" }, { publishedAt: "desc" }],
+    orderBy: [{ businessDef: { sortOrder: "asc" } }, { importance: "asc" }, { publishedAt: "desc" }],
     select: {
       title: true,
       business: true,

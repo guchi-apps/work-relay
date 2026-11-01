@@ -265,7 +265,7 @@ export async function listNewsMailArticles(filters: NewsMailFilters, now = new D
   return prisma.industryInformation.findMany({
     where: { AND: conditions },
     include: ARTICLE_ANALYSIS_INCLUDE,
-    orderBy: [{ business: "asc" }, { importance: "asc" }, { publishedAt: "desc" }, { collectedAt: "desc" }],
+    orderBy: [{ businessDef: { sortOrder: "asc" } }, { importance: "asc" }, { publishedAt: "desc" }, { collectedAt: "desc" }],
   });
 }
 
@@ -275,6 +275,6 @@ export async function listIndustryInformationByIds(articleIds: string[]): Promis
   return prisma.industryInformation.findMany({
     where: { id: { in: articleIds } },
     include: ARTICLE_ANALYSIS_INCLUDE,
-    orderBy: [{ business: "asc" }, { importance: "asc" }, { publishedAt: "desc" }, { collectedAt: "desc" }],
+    orderBy: [{ businessDef: { sortOrder: "asc" } }, { importance: "asc" }, { publishedAt: "desc" }, { collectedAt: "desc" }],
   });
 }

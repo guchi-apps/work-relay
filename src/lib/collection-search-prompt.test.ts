@@ -91,6 +91,12 @@ describe("buildCollectionSearchSchema", () => {
     assert.deepEqual([...items.required].sort(), Object.keys(items.properties).sort());
   });
 
+  it("区分のenumはマスタの区分（AI関連を含む）と一致し、nextPoliciesも区分で縛る", () => {
+    const schema = buildCollectionSearchSchema() as { properties: { articles: { items: { properties: { business: { enum: string[] } } } }; nextPolicies: { items: { properties: { business: { enum: string[] } } } } } };
+    assert.deepEqual(schema.properties.articles.items.properties.business.enum, ["EXTERIOR", "LOCKER", "AI"]);
+    assert.deepEqual(schema.properties.nextPolicies.items.properties.business.enum, ["EXTERIOR", "LOCKER", "AI"]);
+  });
+
   it("情報種別は週報登録APIと同じ12種類", () => {
     assert.equal(COLLECTED_INFORMATION_TYPES.length, 15);
   });
@@ -210,5 +216,28 @@ describe("parseCollectionSearchPayload", () => {
     if (!result.ok) return;
     assert.deepEqual(result.articles[0].keywords, ["宅配", "x".repeat(100)]);
     assert.deepEqual(result.articles[0].tags, []);
+  });
+
+  it("nextPoliciesは区分ごとに読み、未知の区分・空の基準は捨てる", () => {
+    const result = parseCollectionSearchPayload({
+      articles: [],
+      nextPolicies: [
+        { business: "AI", policy: "AIの基準" },
+        { business: "EXTERIOR", policy: "  " },
+        { business: "UNKNOWN", policy: "x" },
+        "壊れた要素",
+      ],
+    });
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.deepEqual(result.nextPolicies, { AI: "AIの基準" });
+  });
+
+  it("AI関連の記事も区分ごとの上限つきで受ける", () => {
+    const ai = Array.from({ length: 7 }, (_, index) => article({ business: "AI", url: `https://example.com/a${index}` }));
+    const result = parseCollectionSearchPayload({ articles: ai });
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.articles.length, COLLECTION_SEARCH_ARTICLE_LIMIT_PER_BUSINESS);
   });
 });
