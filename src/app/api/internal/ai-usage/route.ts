@@ -19,9 +19,8 @@ export async function GET(request: Request) {
   const since = new Date(now.getTime() - LAST_7D_MS);
   const completed = { status: "COMPLETED" as const, finishedAt: { gte: since } };
 
-  const [analyses, briefs, searches] = await Promise.all([
+  const [analyses, searches] = await Promise.all([
     prisma.articleAnalysis.findMany({ where: { createdAt: { gte: since } }, select: { model: true, createdAt: true } }),
-    prisma.weeklyBriefJob.findMany({ where: completed, select: { model: true, finishedAt: true } }),
     prisma.collectionSearchJob.findMany({ where: completed, select: { model: true, finishedAt: true } }),
   ]);
 
@@ -30,7 +29,6 @@ export async function GET(request: Request) {
 
   const features: UsageFeature[] = [
     ...summarizeFeature("記事のAI解析", analyses.map((row) => ({ model: row.model, at: row.createdAt })), now),
-    ...summarizeFeature("週の総括", toRecords(briefs), now),
     ...summarizeFeature("ニュース収集", toRecords(searches), now),
   ];
 

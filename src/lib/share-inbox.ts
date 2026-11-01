@@ -12,8 +12,6 @@
  * Prismaをimportしないため`node --test`から直接読める。
  */
 
-import { getWeekRange, isWithinWeek, OLDEST_WEEK_OFFSET } from "./jst-week.ts";
-
 export const SHARE_INBOX_TTL_MS = 10 * 60 * 1000;
 export const SHARE_INBOX_MAX_FILES = 20;
 /** 1件あたりの合計。本番のNodeはヒープ128MB・320MBで再起動なので、置けるのは数件ぶんまで。 */
@@ -236,18 +234,9 @@ export function fallbackArticleTitle(shared: SharedText): string {
 }
 
 /**
- * 「この記事だけ送る」の行き先。記事が入っている週（公開日、無ければ取得日）の「ニュースを送る」を、
- * その記事だけにチェックを入れて開く。週送りで遡れる範囲より古ければ今週にする。
- * 仕分けの絞り込みは「すべて」にする——登録済みの記事が不採用になっていても一覧から消さないため。
+ * 「この記事を送る」の行き先。記事詳細を、メール送信シートを開いた状態で開く（#385）。
+ * 週報メール画面（`/dashboard/news-mail`）は廃止したため、週やチェックの指定は要らない。
  */
-export function buildNewsMailPickPath(articleId: string, referenceDate: Date, now: Date): string {
-  let week = 0;
-  for (let offset = 0; offset >= OLDEST_WEEK_OFFSET; offset--) {
-    if (isWithinWeek(referenceDate, getWeekRange(offset, now))) {
-      week = offset;
-      break;
-    }
-  }
-  const params = new URLSearchParams({ week: String(week), basis: "either", triage: "all", pick: articleId });
-  return `/dashboard/news-mail?${params.toString()}`;
+export function buildArticleMailPath(articleId: string): string {
+  return `/dashboard/articles/${encodeURIComponent(articleId)}?mail=1`;
 }

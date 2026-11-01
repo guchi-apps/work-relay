@@ -66,15 +66,9 @@ export function startOfJstDay(now: Date): Date {
   return new Date(jst - (jst % DAY_MS) - JST_OFFSET_MS);
 }
 
-export type QueueEntry = { kind: "article" | "weekly_brief"; queuedAt: Date };
+export type QueueEntry = { queuedAt: Date };
 
-/**
- * 待ち行列を、ポーラーが実際に取る順に並べる。
- *
- * `claimAnalysisJobs()`は記事の解析を古い順に取り、**余った枠でだけ**週の総括を取る。
- * そのため積んだ時刻が早くても、総括は待っている記事がすべて片付くまで後ろに回る。
- */
+/** 待ち行列を、ポーラーが実際に取る順（積んだ時刻の古い順）に並べる。 */
 export function orderQueue<T extends QueueEntry>(entries: T[]): T[] {
-  const byQueuedAt = (a: T, b: T) => a.queuedAt.getTime() - b.queuedAt.getTime();
-  return [...entries.filter((entry) => entry.kind === "article").sort(byQueuedAt), ...entries.filter((entry) => entry.kind === "weekly_brief").sort(byQueuedAt)];
+  return [...entries].sort((a, b) => a.queuedAt.getTime() - b.queuedAt.getTime());
 }

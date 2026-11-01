@@ -1,7 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { canAcceptReport, classifyFailure, FAILURE_MESSAGE_LIMIT, isDuplicateJobError, LEASE_SECONDS, MAX_CLAIM_JOBS, shouldAutoExcludeFromWeekly, truncateFailureMessage, type FailureKindValue, type FailureSignal, type JobStatusValue } from "@/lib/analysis-job-rules";
-import { claimWeeklyBriefJobs, listActiveWeeklyBriefJobs, releaseExpiredWeeklyBriefLeases, reportWeeklyBriefResult } from "@/lib/weekly-brief";
 import { claimCollectionSearchJobs, releaseExpiredCollectionSearchLeases, reportCollectionSearchResult } from "@/lib/collection-search";
 import { getBusinesses } from "@/lib/businesses";
 import { buildAnalysisPrompt, buildOutputSchema, parseAnalysisPayload, parseAnnouncedOn, type AnalysisImportanceValue, type AnalysisPeerArticle, type AnalysisRelevanceValue } from "@/lib/analysis-prompt";
@@ -53,12 +52,12 @@ export async function enqueueAnalysisJob(articleId: string, requestedBy: string 
 
 /**
  * ポーラーへ渡すジョブ1件。**ポーラーが読むのは`jobId`・`prompt`・`outputSchema`（と任意の
- * `timeoutSeconds`）だけ**なので、週の総括（#110。`kind: "weekly_brief"`）や業界ニュースの
+ * `timeoutSeconds`）だけ**なので、業界ニュースの
  * 収集（`kind: "collection_search"`）を同じ配列へ混ぜても、ポーラーの読み取り側は変わらない。
  * `articleId`は記事解析のときだけ入り、それ以外ではnullになる。`timeoutSeconds`は実行上限を
  * 既定（記事1件ぶん）より長くしたいジョブ（収集）だけが持つ。
  */
-export type ClaimedJob = { jobId: string; kind: "article" | "weekly_brief" | "collection_search"; articleId: string | null; articleTitle: string; prompt: string; outputSchema: Record<string, unknown>; leaseExpiresAt: string; timeoutSeconds?: number };
+export type ClaimedJob = { jobId: string; kind: "article" | "collection_search"; articleId: string | null; articleTitle: string; prompt: string; outputSchema: Record<string, unknown>; leaseExpiresAt: string; timeoutSeconds?: number };
 export type ClaimInput = { host: string; maxJobs: number; codexAuthMode: string | null; codexVersion: string | null };
 
 /**
@@ -87,9 +86,6 @@ export async function claimAnalysisJobs(input: ClaimInput, now = new Date()): Pr
     update: { lastSeenAt: now, codexAuthMode: input.codexAuthMode, codexVersion: input.codexVersion },
   });
   await releaseExpiredLeases(now);
-  // 総括ジョブ（#110）の回収は取得の枠が残っているかに関わらず行う。記事の解析で枠が
-  // 埋まっている間に止まると、落ちた総括がRUNNINGのまま戻らなくなる。
-  await releaseExpiredWeeklyBriefLeases(now);
   await releaseExpiredCollectionSearchLeases(now);
 
   const take = Math.min(Math.max(input.maxJobs, 0), MAX_CLAIM_JOBS);
@@ -122,16 +118,8 @@ export async function claimAnalysisJobs(input: ClaimInput, now = new Date()): Pr
     });
   }
 
-  // 記事の解析を優先し、余った枠でだけ週の総括（#110）を取る。総括は1回あたり数分かかるので、
-  // 先に取ると仕分けを待っている記事の解析が後回しになる。
-  if (claimed.length < take) {
-    const briefs = await claimWeeklyBriefJobs(input.host, take - claimed.length, now);
-    for (const brief of briefs) {
-      claimed.push({ jobId: brief.jobId, kind: "weekly_brief", articleId: null, articleTitle: brief.label, prompt: brief.prompt, outputSchema: brief.outputSchema, leaseExpiresAt: brief.leaseExpiresAt });
-    }
-  }
-  // 業界ニュースの収集は日次の定期実行で、人が結果を待っているわけではない。記事の解析・総括の
-  // どちらよりも後ろにして、余った枠でだけ取る。
+  // 業界ニュースの収集は日次の定期実行で、人が結果を待っているわけではない。記事の解析より
+  // 後ろにして、余った枠でだけ取る。
   if (claimed.length < take) {
     const searches = await claimCollectionSearchJobs(input.host, take - claimed.length, now);
     for (const search of searches) {
@@ -168,11 +156,9 @@ export type ReportResult = { ok: true; status: JobStatusValue } | { ok: false; r
 /** ポーラーからの結果を保存し、ジョブと記事の状態を進める。 */
 export async function reportAnalysisResult(input: ReportInput, now = new Date()): Promise<ReportResult> {
   const job = await prisma.articleAnalysisJob.findUnique({ where: { id: input.jobId }, select: { id: true, articleId: true, status: true } });
-  // 記事解析のジョブに無ければ週の総括（#110）、それにも無ければ業界ニュースの収集として扱う。
+  // 記事解析のジョブに無ければ業界ニュースの収集として扱う。
   // ポーラーはどれもjobIdだけを送ってくるため、振り分けはここで行う（報告APIの契約は変えない）。
   if (!job) {
-    const brief = await reportWeeklyBriefResult(input, now);
-    if (brief.ok || brief.reason !== "not_found") return brief;
     return reportCollectionSearchResult(input, now);
   }
   // 期限切れで一度QUEUEDへ戻ったジョブへ、遅れて届いた結果は捨てる（次の実行が正になる）。
@@ -306,11 +292,7 @@ export async function setTriageDecision(articleIds: string[], adopt: boolean, re
 
 // --- 画面向けの取得 -------------------------------------------------------------------
 
-/**
- * `queued`・`running`は記事の解析だけの件数（週報メール画面が「総括より先に走る記事の数」として使う）。
- * 週の総括の件数は`briefQueued`・`briefRunning`に分けて持ち、帯では合算して出す（#137）。
- */
-export type AnalysisOverview = { queued: number; running: number; briefQueued: number; briefRunning: number; failed: number; authRequired: number; worker: { host: string; lastSeenAt: Date; codexAuthMode: string | null; codexVersion: string | null; lastError: string | null } | null };
+export type AnalysisOverview = { queued: number; running: number; failed: number; authRequired: number; worker: { host: string; lastSeenAt: Date; codexAuthMode: string | null; codexVersion: string | null; lastError: string | null } | null };
 
 /**
  * 画面上部の実行環境ストリップに出す、キューの件数とポーラーの生存状況。
@@ -319,29 +301,24 @@ export type AnalysisOverview = { queued: number; running: number; briefQueued: n
  * 再解析で直った記事の過去の失敗まで積み上がり続け、解析状況画面の「要対応」と数が合わない。
  */
 export async function getAnalysisOverview(): Promise<AnalysisOverview> {
-  const [jobs, briefs, articles, worker] = await Promise.all([
+  const [jobs, articles, worker] = await Promise.all([
     prisma.articleAnalysisJob.groupBy({ by: ["status"], _count: { _all: true }, where: { status: { in: ["QUEUED", "RUNNING"] } } }),
-    prisma.weeklyBriefJob.groupBy({ by: ["status"], _count: { _all: true }, where: { status: { in: ["QUEUED", "RUNNING"] } } }),
     prisma.industryInformation.groupBy({ by: ["analysisStatus"], _count: { _all: true }, where: { analysisStatus: { in: ["FAILED", "AUTH_REQUIRED"] } } }),
     prisma.analysisWorker.findFirst({ orderBy: { lastSeenAt: "desc" } }),
   ]);
   const jobCount = (status: JobStatusValue) => jobs.find((row) => row.status === status)?._count._all ?? 0;
-  const briefCount = (status: JobStatusValue) => briefs.find((row) => row.status === status)?._count._all ?? 0;
   const articleCount = (status: JobStatusValue) => articles.find((row) => row.analysisStatus === status)?._count._all ?? 0;
-  return { queued: jobCount("QUEUED"), running: jobCount("RUNNING"), briefQueued: briefCount("QUEUED"), briefRunning: briefCount("RUNNING"), failed: articleCount("FAILED"), authRequired: articleCount("AUTH_REQUIRED"), worker };
+  return { queued: jobCount("QUEUED"), running: jobCount("RUNNING"), failed: articleCount("FAILED"), authRequired: articleCount("AUTH_REQUIRED"), worker };
 }
 
 type QueueArticle = { id: string; title: string; business: string };
 
-/** 解析状況画面（#137）の1行。記事の解析と週の総括を同じ形で並べる。 */
+/** 解析状況画面（#137）の1行。 */
 export type QueueItem = {
   id: string;
-  kind: "article" | "weekly_brief";
-  /** 記事のときだけ入る（総括にはリンク先の記事が無い）。 */
-  article: QueueArticle | null;
+  article: QueueArticle;
   label: string;
-  attempt: number | null;
-  articleCount: number | null;
+  attempt: number;
   queuedAt: Date;
   startedAt: Date | null;
   leaseExpiresAt: Date | null;
@@ -364,13 +341,12 @@ const QUEUE_ARTICLE_SELECT = { id: true, title: true, business: true } as const;
 
 /** 解析状況画面（#137）。何を解析中で、何が待っていて、何が止まっているかをまとめて返す。 */
 export async function getAnalysisQueueDetail(options: { recentLimit: number; attentionLimit: number; todayStart: Date }): Promise<AnalysisQueueDetail> {
-  const [activeJobs, briefs, attentionArticles, completedJobs, completedToday, failedToday, durationToday] = await Promise.all([
+  const [activeJobs, attentionArticles, completedJobs, completedToday, failedToday, durationToday] = await Promise.all([
     prisma.articleAnalysisJob.findMany({
       where: { status: { in: ["QUEUED", "RUNNING"] } },
       orderBy: { queuedAt: "asc" },
       select: { id: true, status: true, attempt: true, queuedAt: true, startedAt: true, leaseExpiresAt: true, workerHost: true, article: { select: QUEUE_ARTICLE_SELECT } },
     }),
-    listActiveWeeklyBriefJobs(),
     // 記事ごとの最新ジョブが止まっているものだけを出す。再解析で直った記事の過去の失敗は出さない。
     prisma.industryInformation.findMany({
       where: { analysisStatus: { in: ["FAILED", "AUTH_REQUIRED"] } },
@@ -389,11 +365,8 @@ export async function getAnalysisQueueDetail(options: { recentLimit: number; att
     prisma.articleAnalysis.aggregate({ _avg: { durationMs: true }, where: { createdAt: { gte: options.todayStart } } }),
   ]);
 
-  const items: QueueItem[] = [
-    ...activeJobs.map((job) => ({ id: job.id, kind: "article" as const, article: job.article, label: job.article.title, attempt: job.attempt, articleCount: null, queuedAt: job.queuedAt, startedAt: job.startedAt, leaseExpiresAt: job.leaseExpiresAt, workerHost: job.workerHost })),
-    ...briefs.map((brief) => ({ id: brief.id, kind: "weekly_brief" as const, article: null, label: brief.label, attempt: null, articleCount: brief.articleCount, queuedAt: brief.queuedAt, startedAt: brief.startedAt, leaseExpiresAt: brief.leaseExpiresAt, workerHost: brief.workerHost })),
-  ];
-  const runningIds = new Set([...activeJobs, ...briefs].filter((job) => job.status === "RUNNING").map((job) => job.id));
+  const items: QueueItem[] = activeJobs.map((job) => ({ id: job.id, article: job.article, label: job.article.title, attempt: job.attempt, queuedAt: job.queuedAt, startedAt: job.startedAt, leaseExpiresAt: job.leaseExpiresAt, workerHost: job.workerHost }));
+  const runningIds = new Set(activeJobs.filter((job) => job.status === "RUNNING").map((job) => job.id));
 
   const attention: AttentionItem[] = [];
   for (const article of attentionArticles) {

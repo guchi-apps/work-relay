@@ -201,3 +201,11 @@ a.codex-strip{text-decoration:none;transition:background .15s}a.codex-strip:hove
 .spin{display:inline-block;width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:imgmail-spin .8s linear infinite;flex:none}.cta:has(.spin){display:inline-flex;align-items:center;gap:8px}.imgmail-loading{display:flex;align-items:center;gap:8px;background:var(--teal-pale);border-radius:8px;padding:9px 12px;font-size:12.5px;font-weight:600;color:var(--teal)}@keyframes imgmail-spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.spin{animation:none}}
 .section-title i.violet,.biz i.violet,.nm-dot.violet{background:#7a5bc7}
 .key-grid{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+
+/* 記事メールの送信ボタンとシート（#385）。PCは右から、スマホ（767px以下）は下から開く。 */
+.btn-mail{border:1px solid var(--teal);background:var(--teal);color:#fff;border-radius:6px;padding:4px 12px;font:700 12px inherit;cursor:pointer}.btn-mail:hover{background:#066d67}.btn-mail:focus-visible,.mail-sheet button:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+.mail-sheet-root{position:fixed;inset:0;z-index:60}.mail-scrim{position:absolute;inset:0;background:rgba(10,20,24,.45)}
+.mail-sheet{position:absolute;top:0;right:0;bottom:0;width:min(500px,100%);background:#fff;border-left:1px solid var(--line);box-shadow:-8px 0 24px rgba(0,0,0,.2);padding:18px 20px;overflow-y:auto;display:flex;flex-direction:column;gap:14px}
+.mail-sheet-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.mail-sheet-head h2{font-size:16px;margin:0}.mail-sheet .btn{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:6px;padding:5px 10px;font:12px inherit;cursor:pointer}
+.mail-sheet-field{display:flex;flex-direction:column;gap:4px}.mail-sheet-field label,.mail-sheet-label{font-size:11px;font-weight:700;color:var(--muted)}.mail-sheet-field textarea{border:1px solid var(--line);border-radius:8px;padding:9px 12px;font:13px/1.6 inherit;color:var(--ink);background:var(--paper);resize:vertical}.mail-sheet-field textarea:focus{outline:2px solid var(--teal);outline-offset:-2px}.mail-sheet .hint{font-size:11px;color:var(--muted)}
+@media(max-width:767px){.mail-sheet{top:48px;left:0;width:100%;border-left:0;border-radius:16px 16px 0 0;box-shadow:0 -8px 24px rgba(0,0,0,.25);padding:14px 16px}}

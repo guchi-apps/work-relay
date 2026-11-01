@@ -2,12 +2,14 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import AnalysisReviewForm from "@/components/AnalysisReviewForm";
 import ArticleAnalysisActions from "@/components/ArticleAnalysisActions";
+import ArticleMailButton from "@/components/ArticleMailButton";
 import HeaderUserMenu from "@/components/HeaderUserMenu";
 import { ANALYSIS_STATUS_CLASS, ANALYSIS_STATUS_LABELS, FAILURE_KIND_LABELS, formatConfidence, formatElapsed, IMPORTANCE_LABELS, relevanceLabel, toDuplicates, toRelatedFindings } from "@/lib/analysis-display";
 import { getAnalysisOverview, getArticleDetail } from "@/lib/article-analysis";
 import { getCurrentUser } from "@/lib/auth";
 import { getBusinesses } from "@/lib/businesses";
 import { formatDate, formatDateTime, formatMetrics, toStringArray } from "@/lib/industry-information";
+import { toNewsMailArticleDto } from "@/lib/news-mail-articles";
 import { getTriageState } from "@/lib/triage";
 
 // 解析の状態は押した直後に変わるため、毎リクエストでDBを読む。
@@ -20,12 +22,14 @@ export const dynamic = "force-dynamic";
  * 関連情報）と、人が事業区分・重要度・週報候補への採否を確定する欄をここに集める。一覧の
  * カードには収まらない量のため画面を分けた。
  */
-export default async function ArticleDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ArticleDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const user = await getCurrentUser();
   if (user.status === "unavailable") return <section className="content"><div className="empty-state"><p>認証状態を確認できませんでした。しばらくしてから再読み込みしてください。</p></div></section>;
   if (user.status === "unauthenticated") redirect("/login");
 
   const { id } = await params;
+  // 共有した記事の登録後（`?mail=1`）は、メール送信シートを開いた状態で始める（#385）。
+  const openMail = (await searchParams).mail === "1";
   const [article, overview, businesses] = await Promise.all([getArticleDetail(id), getAnalysisOverview(), getBusinesses()]);
   if (!article) notFound();
 
@@ -47,7 +51,7 @@ export default async function ArticleDetailPage({ params }: { params: Promise<{ 
         <h1>{article.title}</h1>
         <p className="lead">{formatDate(article.publishedAt ?? article.occurredAt ?? article.collectedAt)}　·　{article.sourceName}　·　{article.isPrimarySource ? "一次情報" : "関連記事"}　·　<a href={article.originalUrl} target="_blank" rel="noreferrer">元記事 ↗</a></p>
       </div>
-      <div className="top-actions"><HeaderUserMenu /></div>
+      <div className="top-actions"><ArticleMailButton article={toNewsMailArticleDto(article)} businesses={businesses} defaultOpen={openMail} /><HeaderUserMenu /></div>
     </header>
 
     <div className="detail-grid">
