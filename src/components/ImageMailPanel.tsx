@@ -43,6 +43,8 @@ function formatBytes(bytes: number): string {
 export default function ImageMailPanel({ sharedId, shareError }: Props) {
   const [title, setTitle] = useState("");
   const [images, setImages] = useState<SelectedImage[]>([]);
+  // 共有メニューから開いたとき、サーバーの一時領域から写真を受け取っている間。
+  const [receiving, setReceiving] = useState(Boolean(sharedId));
   const [widthMode, setWidthMode] = useState<WidthPreset>(DEFAULT_WIDTH);
   const [building, setBuilding] = useState(false);
   const [buildError, setBuildError] = useState<string | null>(null);
@@ -121,6 +123,7 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
       } catch {
         if (sharedId) setShareNotice({ kind: "error", message: "共有された写真の読み込みに失敗しました。もう一度共有してください。" });
       } finally {
+        setReceiving(false);
         // 再読み込みで同じ番号を問い合わせ直さないよう、アドレスバーからクエリを外す。
         if (sharedId || shareError) window.history.replaceState(null, "", window.location.pathname);
       }
@@ -221,7 +224,9 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
   const doneCount = partStatuses.filter((status) => status === "done").length;
   const allSent = partCount > 0 && doneCount === partCount;
   const nextPart = partStatuses.findIndex((status) => status !== "done") + 1;
-  const canBuild = !building && images.length > 0 && title.trim().length > 0;
+  // サムネイル作成中はボタンを塞がない（#349）。塞ぐのは共有写真の受け取り中だけ。
+  const loadingPhotos = receiving;
+  const canBuild = !building && !loadingPhotos && images.length > 0 && title.trim().length > 0;
   const canSend = !sending && buildResult !== null && !allSent;
 
   const sendLabel = sending
@@ -265,9 +270,17 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
       <div className="imgmail-block">
         <div className="imgmail-block-head"><h2>写真</h2><span>{images.length}枚選択中</span></div>
         <div className="imgmail-add">
-          <button type="button" className="cta" onClick={() => captureInputRef.current?.click()}>📷　写真を撮る</button>
-          <button type="button" className="cta ghost" onClick={() => pickInputRef.current?.click()}>🖼　写真を追加</button>
+          <button type="button" className="cta" disabled={loadingPhotos} onClick={() => captureInputRef.current?.click()}>📷　写真を撮る</button>
+          <button type="button" className="cta ghost" disabled={loadingPhotos} onClick={() => pickInputRef.current?.click()}>
+            {loadingPhotos ? <><i className="spin" aria-hidden="true" />読み込み中…</> : "🖼　写真を追加"}
+          </button>
         </div>
+        {loadingPhotos && (
+          <div className="imgmail-loading" role="status" aria-live="polite">
+            <i className="spin" aria-hidden="true" />
+            共有された写真を受け取っています…
+          </div>
+        )}
         <input ref={captureInputRef} type="file" accept="image/*" capture="environment" hidden onChange={(event) => { addFiles(event.target.files); event.target.value = ""; }} />
         <input ref={pickInputRef} type="file" accept="image/*" multiple hidden onChange={(event) => { addFiles(event.target.files); event.target.value = ""; }} />
         {images.length > 0 && (
@@ -295,7 +308,7 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
       </div>
 
       <div className="imgmail-block">
-        <div className="imgmail-block-head"><h2>短辺</h2><span>縦横のうち短いほうの長さ。2MBを超えたら分割します</span></div>
+        <div className="imgmail-block-head"><h2>短辺</h2><span>縦横のうち短いほうの長さ。3MBを超えたら分割します</span></div>
         <div className="segmented">
           {WIDTH_PRESETS.map((preset) => (
             <button key={preset} type="button" className={widthMode === preset ? "active" : ""} onClick={() => { setWidthMode(preset); resetOutcome(); }}>{preset}px</button>
@@ -314,7 +327,7 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
             <div><small>短辺</small><p>{buildResult.width}px</p></div>
             <div><small>通数</small><p>{partCount}通</p></div>
           </div>
-          {partCount > 1 && <div className="result-note">ℹ️　合計が2MBを超えるため、{partCount}通に分けました。1通ずつ順に送信します。</div>}
+          {partCount > 1 && <div className="result-note">ℹ️　合計が3MBを超えるため、{partCount}通に分けました。1通ずつ順に送信します。</div>}
           {partCount > 1 && (
             <div className="parts">
               {buildResult.parts.map((part, index) => (
@@ -349,7 +362,7 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
         )
       )}
 
-      <p className="helper">2MBを超える場合は、2MB以下のZIPに分けて複数のメールで送ります。</p>
+      <p className="helper">3MBを超える場合は、3MB以下のZIPに分けて複数のメールで送ります。</p>
     </div>
     </>
   );
