@@ -2,9 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { formatPartSuffix } from "@/lib/image-mail-split";
-import { WIDTH_PRESETS, buildImageMailZip, type ImageMailZipResult, type WidthPreset } from "@/lib/image-mail-client";
+import { DEFAULT_WIDTH, WIDTH_PRESETS, buildImageMailZip, type ImageMailZipResult, type WidthPreset } from "@/lib/image-mail-client";
 
-type WidthMode = "auto" | WidthPreset;
 type ShareNotice = { kind: "received"; count: number } | { kind: "error"; message: string };
 
 const SHARE_ERROR_MESSAGES: Record<string, string> = {
@@ -40,7 +39,7 @@ function formatBytes(bytes: number): string {
 export default function ImageMailPanel({ sharedId, shareError }: Props) {
   const [title, setTitle] = useState("");
   const [images, setImages] = useState<SelectedImage[]>([]);
-  const [widthMode, setWidthMode] = useState<WidthMode>("auto");
+  const [widthMode, setWidthMode] = useState<WidthPreset>(DEFAULT_WIDTH);
   const [building, setBuilding] = useState(false);
   const [buildError, setBuildError] = useState<string | null>(null);
   const [buildResult, setBuildResult] = useState<ImageMailZipResult | null>(null);
@@ -124,8 +123,7 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
     setBuilding(true);
     setBuildError(null);
     try {
-      const manualWidth = widthMode === "auto" ? null : widthMode;
-      const result = await buildImageMailZip(images.map((image) => image.file), manualWidth);
+      const result = await buildImageMailZip(images.map((image) => image.file), widthMode);
       setBuildResult(result);
       setPartKeys(result.parts.map(() => crypto.randomUUID()));
       setPartStatuses(result.parts.map(() => "waiting"));
@@ -249,9 +247,8 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
       </div>
 
       <div className="imgmail-block">
-        <div className="imgmail-block-head"><h2>横幅</h2><span>2MBを超えると自動で下げ、それでも超えたら分割します</span></div>
+        <div className="imgmail-block-head"><h2>短辺</h2><span>縦横のうち短いほうの長さ。2MBを超えたら分割します</span></div>
         <div className="segmented">
-          <button type="button" className={widthMode === "auto" ? "active" : ""} onClick={() => { setWidthMode("auto"); resetOutcome(); }}>自動<small>1200→900→600</small></button>
           {WIDTH_PRESETS.map((preset) => (
             <button key={preset} type="button" className={widthMode === preset ? "active" : ""} onClick={() => { setWidthMode(preset); resetOutcome(); }}>{preset}px</button>
           ))}
@@ -266,10 +263,9 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
         <div className="result-card">
           <div className="result-grid">
             <div><small>画像数</small><p>{images.length}枚</p></div>
-            <div><small>最終横幅</small><p>{buildResult.width}px</p></div>
+            <div><small>短辺</small><p>{buildResult.width}px</p></div>
             <div><small>通数</small><p>{partCount}通</p></div>
           </div>
-          {buildResult.autoDowngraded && <div className="result-note">ℹ️　2MBを超えたため、{buildResult.width}pxへ自動で縮小しました。</div>}
           {partCount > 1 && <div className="result-note">ℹ️　合計が2MBを超えるため、{partCount}通に分けました。1通ずつ順に送信します。</div>}
           {partCount > 1 && (
             <div className="parts">
@@ -305,7 +301,7 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
         )
       )}
 
-      <p className="helper">600pxでも2MBを超える場合は、2MB以下のZIPに分けて複数のメールで送ります。</p>
+      <p className="helper">2MBを超える場合は、2MB以下のZIPに分けて複数のメールで送ります。</p>
     </div>
     </>
   );
