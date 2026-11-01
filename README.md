@@ -72,7 +72,7 @@ ChatGPT定期タスク → AIDEのMCPツール → Research Deskの内部API →
 シークレットはResearch DeskとAIDEのサーバー環境変数（AIDE側は `AIDE_RESEARCH_DESK_TOKEN`）
 だけで管理し、ChatGPTへは渡さない。片方だけ値を変えると連携が止まる。
 
-記事は `EXTERIOR`（エクステリア事業＝宅配・ポスト）・`LOCKER`（ロッカー事業）・`AI`（AI関連＝Gemini・Copilot）のいずれか（区分は`industry_business`テーブルが正。旧`DELIVERY`は`EXTERIOR`として受け付ける）に分け、1回あたり全体6件・各事業
+記事は `EXTERIOR`（エクステリア事業＝宅配・ポスト）・`LOCKER`（ロッカー事業）・`AI`（AI関連＝Gemini・Copilot）のいずれか（区分は`industry_business`テーブルが正。旧`DELIVERY`は受け付けない）に分け、1回あたり全体6件・各事業
 3件まで。同じURLは `normalizedUrl` の一意制約で重複として扱う。URLが異なっていても同一発表と
 判定した記事は新規作成せず既存記事を更新するため（#43）、定期タスクから安全に再実行できる。
 週あたりの保持上限（事業ごと5件）を超えた場合は、優先度の低い既存記事を置換または新規候補を
