@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  acceptsJson,
   buildNewsMailPickPath,
   buildSharePagePath,
   extractUrl,
@@ -63,6 +64,41 @@ describe("putShareEntry / takeShareEntry", () => {
     assert.deepEqual(putShareEntry(store, { title: "", files: [photo(SHARE_INBOX_MAX_TOTAL_BYTES + 1)] }, 0), { ok: false, reason: "too_large" });
     assert.deepEqual(putShareEntry(store, { title: "", files: [{ name: "a.pdf", type: "application/pdf", data: new Uint8Array(1) }] }, 0), { ok: false, reason: "not_image" });
     assert.equal(store.size, 0);
+  });
+});
+
+describe("putShareEntry / takeShareEntry（冪等キーと所有者。#354）", () => {
+  it("同じ利用者・同じキーの再送は最初の共有を返し、写真を足さない", () => {
+    const store = new Map<string, ShareInboxEntry>();
+    assert.deepEqual(putShareEntry(store, { title: "", files: [photo(), photo()], key: "k1", owner: "a@example.com" }, 0, "x"), { ok: true, id: "x", count: 2 });
+    assert.deepEqual(putShareEntry(store, { title: "", files: [photo(), photo()], key: "k1", owner: "a@example.com" }, 1, "y"), { ok: true, id: "x", count: 2 });
+    assert.equal(store.size, 1);
+    assert.equal(takeShareEntry(store, "x", 2, "a@example.com")?.files.length, 2);
+    // 取り出した後に残存entryは無い
+    assert.equal(takeShareEntry(store, null, 3, "a@example.com"), null);
+    assert.equal(store.size, 0);
+  });
+
+  it("別の利用者の同じキーは別の共有になる", () => {
+    const store = new Map<string, ShareInboxEntry>();
+    putShareEntry(store, { title: "", files: [photo()], key: "k1", owner: "a@example.com" }, 0, "x");
+    assert.deepEqual(putShareEntry(store, { title: "", files: [photo()], key: "k1", owner: "b@example.com" }, 1, "y"), { ok: true, id: "y", count: 1 });
+    assert.equal(store.size, 2);
+  });
+
+  it("他の利用者の共有は取り出せず、消えもしない", () => {
+    const store = new Map<string, ShareInboxEntry>();
+    putShareEntry(store, { title: "", files: [photo()], owner: "a@example.com" }, 0, "x");
+    assert.equal(takeShareEntry(store, "x", 1, "b@example.com"), null);
+    assert.equal(takeShareEntry(store, null, 1, "b@example.com"), null);
+    assert.equal(store.size, 1);
+    assert.equal(takeShareEntry(store, null, 2, "a@example.com")?.id, "x");
+  });
+
+  it("所有者のない共有（ショートカット）はログイン中の誰でも取り出せる", () => {
+    const store = new Map<string, ShareInboxEntry>();
+    putShareEntry(store, { title: "", files: [photo()] }, 0, "x");
+    assert.equal(takeShareEntry(store, "x", 1, "b@example.com")?.id, "x");
   });
 });
 
@@ -218,5 +254,18 @@ describe("buildNewsMailPickPath", () => {
   });
   it("遡れる範囲より古ければ今週にする", () => {
     assert.match(buildNewsMailPickPath("a1", new Date("2025-01-01T00:00:00Z"), now), /week=0&/);
+  });
+});
+
+describe("acceptsJson（#318）", () => {
+  it("JSONを求めるAcceptだけtrue", () => {
+    assert.equal(acceptsJson("application/json"), true);
+    assert.equal(acceptsJson("text/html, Application/JSON; q=0.9"), true);
+  });
+  it("ブラウザのフォーム送信や未指定はfalse（従来のリダイレクトを保つ）", () => {
+    assert.equal(acceptsJson("text/html,application/xhtml+xml,*/*;q=0.8"), false);
+    assert.equal(acceptsJson("*/*"), false);
+    assert.equal(acceptsJson(null), false);
+    assert.equal(acceptsJson("application/jsonx"), false);
   });
 });

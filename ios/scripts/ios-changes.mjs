@@ -8,7 +8,7 @@
 // 印は処理済み・内部グループへの割当てが済んだあとにだけ付けるので、途中で失敗した配布の
 // 変更も次の判定に残る（リリースごとの差分ではなく、配布済みとの差分で見る）。
 //
-// 配布物に入るのは WorkRelay/・WorkRelay.xcodeproj/・WorkRelay-Info.plist・scripts/ExportOptions.plist だけ。
+// 配布物に入るのは WorkRelay/・WorkRelayShare/・Shared/・WorkRelay.xcodeproj/・各Info.plist・entitlements・scripts/ExportOptions.plist だけ。
 // README・scripts（判定やワークフロー用）は入らないので除外し、pbxproj の版番号の行
 // （MARKETING_VERSION・CURRENT_PROJECT_VERSION）だけの差分も数えない（リリースのバンプで毎回書き換わる）。
 
@@ -23,6 +23,12 @@ export const DISTRIBUTED_PATHSPEC = [
   "ios/WorkRelay",
   "ios/WorkRelay.xcodeproj",
   "ios/WorkRelay-Info.plist",
+  // 共有拡張（#318）。拡張だけの変更でも配布が要る
+  "ios/WorkRelayShare",
+  "ios/WorkRelayShare-Info.plist",
+  "ios/Shared",
+  "ios/WorkRelay.entitlements",
+  "ios/WorkRelayShare.entitlements",
   "ios/scripts/ExportOptions.plist",
   ":(exclude,glob)**/*.md",
 ];

@@ -503,15 +503,16 @@ AIDE側がマージされるまでエンドツーエンドの送信は動かな�
 
 - **画像圧縮・ZIP化はいずれも追加依存を最小限にしている。** リサイズ・JPEG化は
   `createImageBitmap()` + `<canvas>.toBlob()`というブラウザ標準APIのみで完結し、追加依存は
-  ZIP化の`fflate`1つだけ（`src/lib/image-mail-client.ts`）。横幅の自動段階縮小（1200→900→600px）は、
-  JPEG化後のサイズの見積もりで1通に収まるかを見てから次の横幅で作り直すループ
-- **2MBを超えるときは複数のZIP・複数のメールに分けて送る（#332）。** 最後の横幅（自動は600px）でも
-  超える場合、`src/lib/image-mail-split.ts`の`planGroups()`が撮影順に先頭から詰めて2MB以下のグループに
+  ZIP化の`fflate`1つだけ（`src/lib/image-mail-client.ts`）。縮小は**短辺基準**（#340。
+  `src/lib/image-mail-resize.ts`の`computeResizedSize()`。縦横比を保ち、拡大はしない）。短辺は800／1200／1600pxから
+  選び、既定は1200px。3MBを超えても短辺を自動で下げず、分割送信で吸収する。送信フォームのキー名は互換のため`width`のまま
+- **3MBを超えるときは複数のZIP・複数のメールに分けて送る（#332）。** 選んだ短辺のままで
+  超える場合、`src/lib/image-mail-split.ts`の`planGroups()`が撮影順に先頭から詰めて3MB以下のグループに
   分ける（見積もりが外れたら`buildParts()`が半分に割って作り直す）。画面は1通ずつ順に
   `/api/image-mail/send`へ送り、`partIndex`/`partTotal`を付ける。サーバーは件名・ZIP添付名のタイトル末尾に
   ` (1/3)`を足してAIDEへ転送するため、AIDE側の変更は要らない。重複送信防止の`idempotencyKey`は通ごとに
-  別で、失敗した通から再開しても送信済みの通は再送しない。1枚だけで2MBを超える写真は分割できず、
-  横幅を下げるよう案内するエラーにする
+  別で、失敗した通から再開しても送信済みの通は再送しない。1枚だけで3MBを超える写真は分割できず、
+  短辺を下げるよう案内するエラーにする
 - **送信APIは`/api/internal/*`と違う認証にしている。** `/api/internal/weekly-report`はAIDE→
   Research Desk方向（共有シークレット）だが、`/api/image-mail/send`はブラウザ→Research Desk
   サーバー方向のため`getCurrentUser()`によるSupabaseセッション認証を使う。Research Desk→AIDE
@@ -1028,3 +1029,29 @@ Supabaseセッションを**一度限りのコード**でWebViewへ渡す（Yote
 
 トークンはURL・ログ・アプリのコードに出ない。`native`が無い`/auth/callback`は従来どおり。テストは`src/lib/native-auth/*.test.ts`
 （Prismaに繋がない部分。DB操作は`stores.ts`に分離）。
+
+### 共有メニュー（Share Extension）からの取り込み（#318）
+
+iPhoneの共有シートに「workRelay」を出し、写真（最大20枚）・記事のURL・文章をショートカット無しで渡す。受け口は既存の
+`POST /api/share/inbox`のまま（写真は20枚・合計10MB・10分・サーバーのメモリにだけ置く、は不変）。
+
+1. **拡張**（`ios/WorkRelayShare/`）は確認画面を出すだけで、**何も送信しない**。写真は1枚ずつ長辺1600px・JPEG・メタデータ無し
+   （撮影場所を外す）に縮め、合計が10MBを超えるときだけ1200px・品質0.6で作り直す。それでも超えるときは渡さずに理由を出す
+2. 確認後、**App Group**（`group.com.gucchii.workrelay`）の共有コンテナへ保存し（`ios/Shared/ShareStore.swift`。同時に1件。
+   新しい共有で置き換わる旨は拡張が出す）、`workrelay://share`でアプリを開く。**開く公開APIが拡張には無い**ため、レスポンダチェーンの
+   `UIApplication`へ`openURL:options:completionHandler:`を送る。開けなくても、アプリが前面になるたびに保存分を取り込む
+3. **アプリ**（`ShareImporter.swift`）が、WKWebViewのセッションCookieで`POST /api/share/inbox`（`Accept: application/json`）へ渡し、返った
+   `openUrl`（「画像を送る」「共有された記事／文章」）をWebViewで開く。**トークンは新設せず、`SHARE_SHORTCUT_TOKEN`も使わない**
+   （`Authorization`を付けないのでサーバーはセッション認証になる。`acceptsJson()`で、リダイレクトではなくJSON・401を返す）。
+   拡張にCookieもトークンも渡さないため、拡張が侵害されても取れるのは共有された内容だけ
+   **再試行で写真が重複して残らないよう、アプリは`PendingShare.id`を冪等キー`shareKey`としてPOSTに付ける**（#354）。
+   サーバーは同じ利用者・同じ`shareKey`のPOSTを、最初の共有の`id`・枚数で返し、写真を再追加しない
+   （応答だけ受け取れず再試行した場合に、未回収のentryが画像メール画面の無指定GETで拾われるのを防ぐ）。
+   置き場のentryは置いた利用者のメールを持ち、`GET`は別の利用者のentryを渡さず消さない。ショートカット
+   （トークン認証）が置いたentryは利用者を持たず、従来どおりログイン中の誰でも取り出せる
+4. **失敗しても内容の所在を隠さない**: ログイン切れ（401。まず保護画面を開いてCookieの更新を試し、だめなら内容を端末に残して案内し、
+   ログイン完了で続きから取り込む）／通信失敗・5xx（端末に残し、やり直しか破棄を選ばせる）／上限超過などの4xx（サーバーが受け付けない
+   ので端末の控えも破棄し、失われたことを明記）／24時間以上前の控え（破棄して明記）
+
+`ios/scripts/check-consistency.mjs`が、App Group・Bundle ID・上限値（枚数・合計サイズ）の食い違いと、`ShareImporter.swift`が
+`Authorization`を使っていないことを照合する。

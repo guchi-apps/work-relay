@@ -29,7 +29,11 @@ export const SHARE_TITLE_MAX_LENGTH = 200;
 
 export type SharedFile = { name: string; type: string; data: Uint8Array };
 /** `batch`は、同じ共有としてまとめる写真に共通のID（#163）。まとめない共有（Androidなど）はnull。 */
-export type ShareInboxEntry = { id: string; title: string; files: SharedFile[]; createdAt: number; batch: string | null };
+/**
+ * `key`は再送を見分ける冪等キー（iOSアプリは`PendingShare.id`）。`owner`は置いた利用者のメール
+ * （ショートカットなど利用者を持たない呼び出し元はnull）。どちらも無い共有は従来どおり。
+ */
+export type ShareInboxEntry = { id: string; title: string; files: SharedFile[]; createdAt: number; batch: string | null; key: string | null; owner: string | null };
 
 type Store = Map<string, ShareInboxEntry>;
 
@@ -70,6 +74,11 @@ export function isRequestBodyTooLarge(contentLength: string | null | undefined):
   return Number(trimmed) > SHARE_INBOX_MAX_REQUEST_BYTES;
 }
 
+/** `Accept`がJSONを求めているか。iOSアプリの共有取り込み（#318）が、リダイレクトではなくJSONを受けるために付ける。 */
+export function acceptsJson(accept: string | null | undefined): boolean {
+  return (accept ?? "").split(",").some((part) => part.split(";")[0].trim().toLowerCase() === "application/json");
+}
+
 const BATCH_ID_PATTERN =/^[A-Za-z0-9._:-]{1,64}$/;
 
 /**
@@ -90,15 +99,22 @@ export function normalizeBatchId(value: string | null | undefined): string | nul
  * 枚数・合計サイズの上限と10分の有効期限は、まとめた単位で守る（期限は最初の1枚を置いた時点から）。
  * 追記が上限を超えるときは断り、それまでに置いた写真は残す。
  */
-export function putShareEntry(store: Store, input: { title: string; files: SharedFile[]; batch?: string | null }, now: number, id: string = crypto.randomUUID()): PutResult {
+export function putShareEntry(store: Store, input: { title: string; files: SharedFile[]; batch?: string | null; key?: string | null; owner?: string | null }, now: number, id: string = crypto.randomUUID()): PutResult {
   pruneExpired(store, now);
   const title = input.title.trim().slice(0, SHARE_TITLE_MAX_LENGTH);
   const batch = input.batch ?? null;
+  const key = input.key ?? null;
+  const owner = input.owner ?? null;
+
+  // 応答だけ受け取れずに再送されたPOSTは、最初に置いたものを返して写真を足さない。
+  // 利用者が違えば同じキーでも別の共有として扱う（他人の共有を横取りさせない）。
+  const duplicate = key ? [...store.values()].find((entry) => entry.key === key && entry.owner === owner) : undefined;
+  if (duplicate) return { ok: true, id: duplicate.id, count: duplicate.files.length };
 
   const invalid = validateSharedFiles(input.files);
   if (invalid) return invalid;
 
-  const existing = batch ? [...store.values()].find((entry) => entry.batch === batch) : undefined;
+  const existing = batch ? [...store.values()].find((entry) => entry.batch === batch && entry.owner === owner) : undefined;
   if (existing) {
     const merged = [...existing.files, ...input.files];
     const mergedInvalid = validateSharedFiles(merged);
@@ -114,18 +130,24 @@ export function putShareEntry(store: Store, input: { title: string; files: Share
     if (oldest === undefined) break;
     store.delete(oldest);
   }
-  store.set(id, { id, title, files: input.files, createdAt: now, batch });
+  store.set(id, { id, title, files: input.files, createdAt: now, batch, key, owner });
   return { ok: true, id, count: input.files.length };
 }
 
-/** 一度だけ取り出す。取り出したら置き場から消す。`id`がnullなら一番新しいもの。 */
-export function takeShareEntry(store: Store, id: string | null, now: number): ShareInboxEntry | null {
+/**
+ * 一度だけ取り出す。取り出したら置き場から消す。`id`がnullなら一番新しいもの。
+ * `owner`を持つ共有は、同じ利用者にしか渡さない（他人のものは消さずに残す）。
+ * 所有者のない共有（ショートカット経由）は、ログイン中の誰でも取り出せる。
+ */
+export function takeShareEntry(store: Store, id: string | null, now: number, owner: string | null = null): ShareInboxEntry | null {
   pruneExpired(store, now);
+  const visible = (candidate: ShareInboxEntry) => candidate.owner === null || candidate.owner === owner;
   let entry: ShareInboxEntry | undefined;
   if (id) {
-    entry = store.get(id);
+    const found = store.get(id);
+    if (found && visible(found)) entry = found;
   } else {
-    for (const candidate of store.values()) entry = candidate;
+    for (const candidate of store.values()) if (visible(candidate)) entry = candidate;
   }
   if (!entry) return null;
   store.delete(entry.id);

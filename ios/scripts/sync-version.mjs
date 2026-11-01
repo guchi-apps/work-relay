@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // XcodeプロジェクトのMARKETING_VERSIONを package.json の version に合わせる（#920）。
-// 手動で実行する（release-develop-to-main.yml は自動マージ不可カテゴリのため組み込んでいない）。
-// TestFlightへ上げる前に実行する。冪等で、リポジトリルート・ios/ のどちらからでも動く。
+// package.json の `version` lifecycleスクリプトから呼ばれ、リリースのバンプPR
+// （release-develop-to-main.yml）で package.json と一緒に pbxproj も更新される（#338。IssueDeckと同じ方式）。
+// 共有ワークフローは依存をインストールしないため、Node標準モジュールだけで書くこと。
+// 手で揃えたいときも実行できる。冪等で、リポジトリルート・ios/ のどちらからでも動く。
 //
 //   node ios/scripts/sync-version.mjs
 
