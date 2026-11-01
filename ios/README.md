@@ -31,11 +31,11 @@ Web/PWA・ショートカット・AndroidのWeb Share Targetはそのまま残�
 
 - [ ] [App Store Connect](https://appstoreconnect.apple.com/) → マイApp →「+」→ 新規App：iOS・名前「workRelay」・言語 日本語・Bundle ID `com.gucchii.workrelay`・SKU 例 `workrelay`（Bundle IDが一覧に無ければ先に Developer サイトで Identifiers に登録）
 - [ ] TestFlight →「内部テスト」にグループを作り、自分を追加。暗号化の質問は「いいえ（標準の暗号化のみ）」
-- [ ] Macに`$HOME/apps/work-relay`のチェックアウト・Xcode 27系・1Password CLI（`op`）のサインインがある（別の場所なら`MAC_REPO_DIR`）
+- [ ] GitHubのsecret`ASC_KEY_ID`・`ASC_ISSUER_ID`・`ASC_KEY_P8`が入っている（`scripts/sync-github-secrets.sh --only ASC_KEY_ID,ASC_ISSUER_ID,ASC_KEY_P8`。下の「TestFlightへの配布」）
 - [ ] 本番にマイグレーション（`native_auth_handoffs`）と`NATIVE_AUTH_ENCRYPTION_KEY`が入っている（`main`へのリリース後）
 - [ ] 実機で最初のログインが通る（Supabaseの許可リダイレクトURLが`/auth/callback?native=1&…`のクエリ付きを弾く場合は、`https://research-desk.gucchii.com/auth/callback**`のようにワイルドカードを足す）
 
-App Store Connect API キーは**新しく作らず**、kurashioと共用（1Passwordの`apps/AppStoreConnect`の`key-id`・`issuer-id`・`key-p8`。`asc.env.tpl`が`op://`参照だけを持つ）。実値はどこにも書かない。
+App Store Connect API キーは**新しく作らず**、他のiOSアプリと共用（1Passwordの`apps/AppStoreConnect`の`key-id`・`issuer-id`・`key-p8`）。`.github/secrets-manifest.tsv`の対応表どおりGitHubのsecretへ同期して使う。実値はどこにも書かない。
 
 ## ビルド方法（Mac + Xcode）
 
@@ -50,20 +50,28 @@ App Store Connect API キーは**新しく作らず**、kurashioと共用（1Pas
 
 ## TestFlightへの配布・再配布
 
-Webが`main`へデプロイされた後に、subpcから1コマンドです（Macへ Tailscale 越しにSSHして Archive → アップロード）。
+**GitHub Actions（macOSランナー）が自動で配る**（#336。IssueDeck等の他アプリと同じ流れ）。以前のsubpcからMacへSSHする
+手動方式（#317）は、SSH経由だとログインキーチェーンが閉じていて署名が`errSecInternalComponent`で失敗するため廃止した。
 
-```bash
-node ios/scripts/sync-version.mjs          # 版番号を package.json に揃える（差分があればコミットして main へ）
-ios/scripts/remote-upload-testflight.sh    # iOSの変更があるときだけ配布する
-IOS_FORCE=1 ios/scripts/remote-upload-testflight.sh   # 変更が無くても配布する
-```
+`deploy.yml`（Deploy to Production）が`main`で成功 → `ios-testflight-trigger.yml` → `ios-testflight.yml`
 
-- **要否の判定**（`needs-testflight.sh`）：前回の成功SHA以降に`ios/WorkRelay`・`ios/WorkRelay.xcodeproj`・`ios/ExportOptions.plist`の差分があるときだけ配布する。Webだけの変更では何もしない
-- **結果の可視化と再実行**：成功したときだけ`~/.local/state/work-relay/testflight-last-sha`を更新し、成功/失敗は`testflight.log`に1行ずつ残る。**失敗した変更は記録されないので次回の判定に残る**（そのまま再実行すればよい）
-- ビルド番号は日時（`YYYYMMDDHHMM`）でArchive時に上書き（pbxprojは触らない）。版番号（`MARKETING_VERSION`）は`sync-version.mjs`で`package.json`に揃え、配布スクリプトが食い違いを検出して止める
-- Mac側の前提：ログインキーチェーンが開いている（codesignが失敗したらMacで`security unlock-keychain ~/Library/Keychains/login.keychain-db`を一度）。**終了コードをパイプで隠さない**（`| tee`を付けない）
-- TestFlightのビルドは90日で期限切れ。そのたびに`IOS_FORCE=1`で上げ直す
-- 署名鍵・APIキー・IPAはリポジトリにも公開artifactにも含めない
+1. **判定**（`ios/scripts/ios-changes.mjs`）：最後に配布し終えたコミットのタグ`ios-testflight/<ビルド番号>`以降に、
+   `ios/WorkRelay`・`ios/WorkRelay.xcodeproj`・`ios/WorkRelay-Info.plist`・`ios/scripts/ExportOptions.plist`の実質的な差分があるときだけ配る
+   （Markdownと、pbxprojの版番号の行だけの差分は数えない）。Webだけの変更ではスキップする。タグが無ければ初回として配る
+2. **署名・アーカイブ・アップロード**（`xcode-27`ランナー）：APIキーによるクラウド署名（`-allowProvisioningUpdates`）。キーチェーンは使わない
+3. **ビルド処理待ち → 内部テストグループへ配布 → タグ`ios-testflight/<ビルド番号>`を打つ**（`ios/scripts/asc-api.mjs`）
+
+- ビルド番号は`run_number*100+run_attempt`。版番号は`package.json`の`version`をアーカイブ時に`MARKETING_VERSION`へ注入する
+  （pbxprojの値はリリースのバンプに追従しなくてよい）
+- 認証情報はGitHubのsecret`ASC_KEY_ID`・`ASC_ISSUER_ID`・`ASC_KEY_P8`。値を変えたときだけ
+  `scripts/sync-github-secrets.sh --only ASC_KEY_ID,ASC_ISSUER_ID,ASC_KEY_P8`で1Passwordから同期する。内部グループが複数あるときだけ
+  repository variable`TESTFLIGHT_GROUP`にグループ名を入れる
+- **再実行**：失敗したrunは「Re-run failed jobs」か、Actionsから`iOS TestFlight`を同じ`sha`で手動実行する（`dry_run`で判定だけ見られる）。
+  印は配布し終えたときだけ進むので、失敗した変更は次の判定にも残る
+- **TestFlightのビルドは90日で期限切れ**：変更が無くても上げ直すときは、最新の`ios-testflight/*`タグを（本人の判断で）削除してから
+  手動実行する。タグが無い扱いになり、初回として配る
+- 失敗はSignaly・Discordへ通知される。iOSの失敗はWebのデプロイの成否とは別のrunで赤くなる（Webの本番反映は済んでいる）
+- 署名鍵・APIキー・IPAはリポジトリにも公開artifactにも含めない（IPAは同じジョブ内でアップロードして捨てる）
 
 ## 実機確認（TestFlightのビルドで）
 
