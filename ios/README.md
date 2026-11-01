@@ -11,7 +11,9 @@ Web/PWA・ショートカット・AndroidのWeb Share Targetはそのまま残�
 | 署名 | Automatic（Apple Developer Program のチーム `6AA3WFTR94`。他のiOSアプリと同じ） |
 | 対応 | iPhone・縦向き・iOS 18以上 |
 | 認証シートの戻り先 | `workrelay://auth-callback`（Supabase・Googleの許可リダイレクトには**登録しない**。サーバーだけが返す） |
-| Associated Domains / Push / App Group / 共有拡張 | 使わない（共有拡張は後続Issue。WebのWeb Pushはネイティブ内でそのまま動くとは見なさない） |
+| 共有拡張 | `WorkRelayShare`（Bundle ID `com.gucchii.workrelay.ShareExtension`）。共有シートの「workRelay」から写真・URL・文章を渡す（#318） |
+| App Group | `group.com.gucchii.workrelay`（アプリと共有拡張が取り込み待ちの内容を受け渡す。トークン・Cookieは置かない） |
+| Associated Domains / Push | 使わない（WebのWeb Pushはネイティブ内でそのまま動くとは見なさない） |
 
 ## 更新が要る場所
 
@@ -85,6 +87,26 @@ IOS_FORCE=1 ios/scripts/remote-upload-testflight.sh   # 変更が無くても配
 トークンはURL・ログ・Swiftのコードに出ません。`workrelay://`を他アプリが横取りしても、`verifier`が無ければコードを消費できません。
 ログイン状態はWKWebViewの既定データストアに残り、再起動しても維持されます。
 
-## 共有拡張について
+## 共有拡張（Share Extension、#318）
 
-iPhoneの共有メニューから写真・URL・文章を直接渡す機能（Share Extension）は、App ID・App Group・拡張と本体の受け渡し・認証の設計が別論点のため後続Issueで扱います。それまでは`docs/share-shortcut.md`のショートカットを使います。
+共有シートの「workRelay」から写真（最大20枚・合計10MB）・記事のURL・文章を渡せます。拡張は確認画面を出して端末へ保存するだけで、
+**何も送信しません**。アプリが開くと保存分を取り込み、既存の「画像を送る」「共有された記事／文章」を開きます（送信は本人が押す）。
+仕組みは[docs/architecture.md](../docs/architecture.md)の「共有メニュー（Share Extension）からの取り込み」。ショートカット・Safari・
+AndroidのWeb Share Targetは従来どおり使えます（[docs/share-shortcut.md](../docs/share-shortcut.md)）。
+
+- コードは`ios/WorkRelayShare/`（拡張）・`ios/Shared/`（アプリと共通）・`ios/WorkRelay/ShareImporter.swift`（アプリ側の取り込み）
+- **App ID `com.gucchii.workrelay.ShareExtension`とApp Group `group.com.gucchii.workrelay`**は、自動署名（`-allowProvisioningUpdates`と
+  App Store ConnectのAPIキー）で初回のArchive時に登録される想定。登録されずに署名で止まったら、Developerサイトの Identifiers で
+  上記のApp IDとApp Groupを作り、両方のApp IDにApp Groups機能を付ける
+- 失敗時の動き: ログイン切れは内容を端末に残してログイン後に続きから取り込む／通信失敗はやり直しか破棄／上限超過・24時間超過は破棄して理由を表示
+
+### 実機確認（TestFlightのビルドで）
+
+- [ ] 写真アプリで複数枚（例: 4枚）を選んで共有 →「workRelay」が出て、確認画面に枚数・サイズが出る →「ワークリレーで開く」でアプリが開き、「画像を送る」に写真が入る（メールは送信されない）
+- [ ] 21枚以上を選んで共有 → 先頭の20枚だけ渡すと案内される
+- [ ] Safariで記事を共有 →「共有された記事」にURLが入る。メモ等の文章だけを共有 →「共有された文章」に入る
+- [ ] アプリがアプリスイッチャーから消えている状態、バックグラウンドにある状態の両方で動く
+- [ ] ログアウトした状態で共有 → ログイン切れの案内が出て、ログインすると続きから取り込まれる
+- [ ] 機内モードで共有 → 「取り込めませんでした」と端末に残っている旨が出て、復帰後に「もう一度取り込む」で取り込める
+- [ ] 拡張からアプリが自動で開かない場合でも、手でworkRelayを開くと取り込まれる
+- [ ] ショートカット（`docs/share-shortcut.md`）とAndroidの共有メニューが従来どおり動く

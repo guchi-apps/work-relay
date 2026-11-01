@@ -10,6 +10,8 @@ final class WebViewModel: NSObject, ObservableObject {
     @Published private(set) var isRetrying = false
 
     let webView: WKWebView
+    /// 共有拡張から受け取った内容をサーバーへ渡す（#318）
+    let shareImporter: ShareImporter
 
     private let auth = NativeAuth()
     private let pathMonitor = NWPathMonitor()
@@ -26,7 +28,9 @@ final class WebViewModel: NSObject, ObservableObject {
         configuration.applicationNameForUserAgent = AppConfig.userAgentApplicationName
 
         webView = WKWebView(frame: .zero, configuration: configuration)
+        shareImporter = ShareImporter(webView: webView)
         super.init()
+        shareImporter.openPath = { [weak self] path in self?.loadAppPath(path) }
 
         webView.navigationDelegate = self
         webView.uiDelegate = self
@@ -181,6 +185,8 @@ extension WebViewModel {
 
         if status == 200, let next = dictionary?["next"] as? String {
             loadAppPath(next)
+            // ログイン切れで止まっていた共有があれば、続きから取り込む
+            await shareImporter.run()
         } else if status == 403 {
             loadAppPath("/login?error=not_allowed")
         } else {

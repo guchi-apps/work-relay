@@ -6,9 +6,38 @@
 	objectVersion = 110;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		4B52A2093061842200F8C8D5 /* WorkRelayShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 4B52A2033061842200F8C8D5 /* WorkRelayShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		4B52A1F13061842200F8C8D5 /* WorkRelay.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WorkRelay.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		4B52A2033061842200F8C8D5 /* WorkRelayShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = WorkRelayShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXContainerItemProxy section */
+		4B52A20A3061842200F8C8D5 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 4B52A1E93061842200F8C8D5 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 4B52A2043061842200F8C8D5;
+			remoteInfo = WorkRelayShare;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		4B52A2083061842200F8C8D5 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				4B52A2093061842200F8C8D5 /* WorkRelayShare.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		4B52A1F33061842200F8C8D5 /* WorkRelay */ = {
@@ -16,10 +45,27 @@
 			path = WorkRelay;
 			sourceTree = "<group>";
 		};
+		4B52A2013061842200F8C8D5 /* Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		4B52A2023061842200F8C8D5 /* WorkRelayShare */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = WorkRelayShare;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		4B52A1EE3061842200F8C8D5 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		4B52A2063061842200F8C8D5 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -33,6 +79,8 @@
 			isa = PBXGroup;
 			children = (
 				4B52A1F33061842200F8C8D5 /* WorkRelay */,
+				4B52A2023061842200F8C8D5 /* WorkRelayShare */,
+				4B52A2013061842200F8C8D5 /* Shared */,
 				4B52A1F23061842200F8C8D5 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,6 +89,7 @@
 			isa = PBXGroup;
 			children = (
 				4B52A1F13061842200F8C8D5 /* WorkRelay.app */,
+				4B52A2033061842200F8C8D5 /* WorkRelayShare.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -55,18 +104,42 @@
 				4B52A1ED3061842200F8C8D5 /* Sources */,
 				4B52A1EE3061842200F8C8D5 /* Frameworks */,
 				4B52A1EF3061842200F8C8D5 /* Resources */,
+				4B52A2083061842200F8C8D5 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				4B52A20B3061842200F8C8D5 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				4B52A1F33061842200F8C8D5 /* WorkRelay */,
+				4B52A2013061842200F8C8D5 /* Shared */,
+			);
+			name = WorkRelay;
+			productName = WorkRelay;
+			productReference = 4B52A1F13061842200F8C8D5 /* WorkRelay.app */;
+			productType = "com.apple.product-type.application";
+		};
+		4B52A2043061842200F8C8D5 /* WorkRelayShare */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4B52A20C3061842200F8C8D5 /* Build configuration list for PBXNativeTarget "WorkRelayShare" */;
+			buildPhases = (
+				4B52A2053061842200F8C8D5 /* Sources */,
+				4B52A2063061842200F8C8D5 /* Frameworks */,
+				4B52A2073061842200F8C8D5 /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				4B52A1F33061842200F8C8D5 /* WorkRelay */,
+				4B52A2023061842200F8C8D5 /* WorkRelayShare */,
+				4B52A2013061842200F8C8D5 /* Shared */,
 			);
-			name = WorkRelay;
-			productName = WorkRelay;
-			productReference = 4B52A1F13061842200F8C8D5 /* WorkRelay.app */;
-			productType = "com.apple.product-type.application";
+			name = WorkRelayShare;
+			productName = WorkRelayShare;
+			productReference = 4B52A2033061842200F8C8D5 /* WorkRelayShare.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -79,6 +152,9 @@
 				LastUpgradeCheck = 2700;
 				TargetAttributes = {
 					4B52A1F03061842200F8C8D5 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					4B52A2043061842200F8C8D5 = {
 						CreatedOnToolsVersion = 27.0;
 					};
 				};
@@ -98,12 +174,20 @@
 			projectRoot = "";
 			targets = (
 				4B52A1F03061842200F8C8D5 /* WorkRelay */,
+				4B52A2043061842200F8C8D5 /* WorkRelayShare */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		4B52A1EF3061842200F8C8D5 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		4B52A2073061842200F8C8D5 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -120,7 +204,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		4B52A2053061842200F8C8D5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		4B52A20B3061842200F8C8D5 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 4B52A2043061842200F8C8D5 /* WorkRelayShare */;
+			targetProxy = 4B52A20A3061842200F8C8D5 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		4B52A1FA3061842300F8C8D5 /* Debug configuration for PBXProject "WorkRelay" */ = {
@@ -249,6 +348,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = WorkRelay.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 6AA3WFTR94;
@@ -284,6 +384,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = WorkRelay.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 6AA3WFTR94;
@@ -314,6 +415,64 @@
 			};
 			name = Release;
 		};
+		4B52A20D3061842200F8C8D5 /* Debug configuration for PBXNativeTarget "WorkRelayShare" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = WorkRelayShare.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6AA3WFTR94;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "WorkRelayShare-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = workRelay;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.18.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gucchii.workrelay.ShareExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		4B52A20E3061842200F8C8D5 /* Release configuration for PBXNativeTarget "WorkRelayShare" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = WorkRelayShare.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6AA3WFTR94;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "WorkRelayShare-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = workRelay;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.18.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gucchii.workrelay.ShareExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -330,6 +489,14 @@
 			buildConfigurations = (
 				4B52A1FD3061842300F8C8D5 /* Debug configuration for PBXNativeTarget "WorkRelay" */,
 				4B52A1FE3061842300F8C8D5 /* Release configuration for PBXNativeTarget "WorkRelay" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		4B52A20C3061842200F8C8D5 /* Build configuration list for PBXNativeTarget "WorkRelayShare" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4B52A20D3061842200F8C8D5 /* Debug configuration for PBXNativeTarget "WorkRelayShare" */,
+				4B52A20E3061842200F8C8D5 /* Release configuration for PBXNativeTarget "WorkRelayShare" */,
 			);
 			defaultConfigurationName = Release;
 		};

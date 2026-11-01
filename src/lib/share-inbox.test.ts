@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  acceptsJson,
   buildNewsMailPickPath,
   buildSharePagePath,
   extractUrl,
@@ -218,5 +219,18 @@ describe("buildNewsMailPickPath", () => {
   });
   it("遡れる範囲より古ければ今週にする", () => {
     assert.match(buildNewsMailPickPath("a1", new Date("2025-01-01T00:00:00Z"), now), /week=0&/);
+  });
+});
+
+describe("acceptsJson（#318）", () => {
+  it("JSONを求めるAcceptだけtrue", () => {
+    assert.equal(acceptsJson("application/json"), true);
+    assert.equal(acceptsJson("text/html, Application/JSON; q=0.9"), true);
+  });
+  it("ブラウザのフォーム送信や未指定はfalse（従来のリダイレクトを保つ）", () => {
+    assert.equal(acceptsJson("text/html,application/xhtml+xml,*/*;q=0.8"), false);
+    assert.equal(acceptsJson("*/*"), false);
+    assert.equal(acceptsJson(null), false);
+    assert.equal(acceptsJson("application/jsonx"), false);
   });
 });
