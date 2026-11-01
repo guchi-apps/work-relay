@@ -70,6 +70,11 @@ export function isRequestBodyTooLarge(contentLength: string | null | undefined):
   return Number(trimmed) > SHARE_INBOX_MAX_REQUEST_BYTES;
 }
 
+/** `Accept`がJSONを求めているか。iOSアプリの共有取り込み（#318）が、リダイレクトではなくJSONを受けるために付ける。 */
+export function acceptsJson(accept: string | null | undefined): boolean {
+  return (accept ?? "").split(",").some((part) => part.split(";")[0].trim().toLowerCase() === "application/json");
+}
+
 const BATCH_ID_PATTERN =/^[A-Za-z0-9._:-]{1,64}$/;
 
 /**

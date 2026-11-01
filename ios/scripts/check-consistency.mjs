@@ -69,8 +69,10 @@ export function checkConsistency() {
     problems.push("WorkRelay-Info.plist に NSCameraUsageDescription がありません（カメラ起動でクラッシュする）");
   }
   const plistRefs = pbxproj.match(/INFOPLIST_FILE = "?WorkRelay-Info\.plist"?;/g)?.length ?? 0;
-  const configCount = pbxproj.match(/GENERATE_INFOPLIST_FILE = YES;/g)?.length ?? 0;
-  if (plistRefs !== configCount || configCount < 2) {
+  // 共有拡張（INFOPLIST_FILE = WorkRelayShare-Info.plist）ぶんの2設定は別に数える
+  const shareRefs = pbxproj.match(/INFOPLIST_FILE = "?WorkRelayShare-Info\.plist"?;/g)?.length ?? 0;
+  const configCount = (pbxproj.match(/GENERATE_INFOPLIST_FILE = YES;/g)?.length ?? 0) - shareRefs;
+  if (plistRefs !== configCount || configCount < 2 || shareRefs !== 2) {
     problems.push("Debug/Release の両方が INFOPLIST_FILE = WorkRelay-Info.plist を指していません");
   }
 
@@ -79,6 +81,37 @@ export function checkConsistency() {
   const { version } = JSON.parse(read("package.json"));
   for (const m of process.env.IOS_CHECK_VERSION === "1" ? pbxproj.matchAll(/MARKETING_VERSION = ([^;]+);/g) : []) {
     if (m[1] !== version) problems.push(`MARKETING_VERSION(${m[1]}) が package.json の version(${version}) と違います。node ios/scripts/sync-version.mjs を実行してください`);
+  }
+
+  // 共有拡張（#318）。拡張とアプリが同じApp Groupを持ち、上限がサーバー（share-inbox.ts）と揃っている。
+  // App Groupが食い違うと、拡張が保存した内容をアプリが読めず、共有が黙って消えたように見える
+  const shareStore = read("ios/Shared/ShareStore.swift");
+  const shareInbox = read("src/lib/share-inbox.ts");
+  const group = shareStore.match(/appGroup = "([^"]+)"/)?.[1];
+  for (const file of ["ios/WorkRelay.entitlements", "ios/WorkRelayShare.entitlements"]) {
+    const entitlements = read(file);
+    if (!group || !entitlements.includes(`<string>${group}</string>`)) problems.push(`${file} に App Group ${group} がありません`);
+  }
+  if ((pbxproj.match(/CODE_SIGN_ENTITLEMENTS = /g)?.length ?? 0) < 4) {
+    problems.push("アプリと共有拡張の Debug/Release の両方が CODE_SIGN_ENTITLEMENTS を指していません");
+  }
+  if (!pbxproj.includes("PRODUCT_BUNDLE_IDENTIFIER = com.gucchii.workrelay.ShareExtension;")) {
+    problems.push("共有拡張の Bundle ID が com.gucchii.workrelay.ShareExtension ではありません");
+  }
+  if (!read("ios/WorkRelayShare-Info.plist").includes("com.apple.share-services")) {
+    problems.push("WorkRelayShare-Info.plist が共有拡張（com.apple.share-services）になっていません");
+  }
+  const swiftFiles = Number(shareStore.match(/maxFiles = (\d+)/)?.[1]);
+  const tsFiles = Number(shareInbox.match(/SHARE_INBOX_MAX_FILES = (\d+)/)?.[1]);
+  if (!swiftFiles || swiftFiles !== tsFiles) problems.push(`共有できる写真の枚数が一致しません: Swift=${swiftFiles} / TS=${tsFiles}`);
+  const swiftBytes = shareStore.match(/maxTotalBytes = ([\d* ]+)/)?.[1]?.trim();
+  const tsBytes = shareInbox.match(/SHARE_INBOX_MAX_TOTAL_BYTES = ([\d* ]+);/)?.[1]?.trim();
+  if (!swiftBytes || swiftBytes !== tsBytes) problems.push(`共有できる写真の合計サイズが一致しません: Swift=${swiftBytes} / TS=${tsBytes}`);
+  // アプリは受け口をセッションで呼ぶ（ショートカット用トークンを使わない）
+  const importer = read("ios/WorkRelay/ShareImporter.swift");
+  if (!importer.includes("api/share/inbox")) problems.push("ShareImporter.swift が /api/share/inbox を呼んでいません");
+  if (/Authorization|SHARE_SHORTCUT_TOKEN/.test(importer.replace(/\/\/.*$/gm, ""))) {
+    problems.push("ShareImporter.swift が Authorization / SHARE_SHORTCUT_TOKEN を使っています（セッション認証にする）");
   }
 
   // 開発用のURLをコミットしていない

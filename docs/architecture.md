@@ -1029,3 +1029,24 @@ Supabaseセッションを**一度限りのコード**でWebViewへ渡す（Yote
 
 トークンはURL・ログ・アプリのコードに出ない。`native`が無い`/auth/callback`は従来どおり。テストは`src/lib/native-auth/*.test.ts`
 （Prismaに繋がない部分。DB操作は`stores.ts`に分離）。
+
+### 共有メニュー（Share Extension）からの取り込み（#318）
+
+iPhoneの共有シートに「workRelay」を出し、写真（最大20枚）・記事のURL・文章をショートカット無しで渡す。受け口は既存の
+`POST /api/share/inbox`のまま（写真は20枚・合計10MB・10分・サーバーのメモリにだけ置く、は不変）。
+
+1. **拡張**（`ios/WorkRelayShare/`）は確認画面を出すだけで、**何も送信しない**。写真は1枚ずつ長辺1600px・JPEG・メタデータ無し
+   （撮影場所を外す）に縮め、合計が10MBを超えるときだけ1200px・品質0.6で作り直す。それでも超えるときは渡さずに理由を出す
+2. 確認後、**App Group**（`group.com.gucchii.workrelay`）の共有コンテナへ保存し（`ios/Shared/ShareStore.swift`。同時に1件。
+   新しい共有で置き換わる旨は拡張が出す）、`workrelay://share`でアプリを開く。**開く公開APIが拡張には無い**ため、レスポンダチェーンの
+   `UIApplication`へ`openURL:options:completionHandler:`を送る。開けなくても、アプリが前面になるたびに保存分を取り込む
+3. **アプリ**（`ShareImporter.swift`）が、WKWebViewのセッションCookieで`POST /api/share/inbox`（`Accept: application/json`）へ渡し、返った
+   `openUrl`（「画像を送る」「共有された記事／文章」）をWebViewで開く。**トークンは新設せず、`SHARE_SHORTCUT_TOKEN`も使わない**
+   （`Authorization`を付けないのでサーバーはセッション認証になる。`acceptsJson()`で、リダイレクトではなくJSON・401を返す）。
+   拡張にCookieもトークンも渡さないため、拡張が侵害されても取れるのは共有された内容だけ
+4. **失敗しても内容の所在を隠さない**: ログイン切れ（401。まず保護画面を開いてCookieの更新を試し、だめなら内容を端末に残して案内し、
+   ログイン完了で続きから取り込む）／通信失敗・5xx（端末に残し、やり直しか破棄を選ばせる）／上限超過などの4xx（サーバーが受け付けない
+   ので端末の控えも破棄し、失われたことを明記）／24時間以上前の控え（破棄して明記）
+
+`ios/scripts/check-consistency.mjs`が、App Group・Bundle ID・上限値（枚数・合計サイズ）の食い違いと、`ShareImporter.swift`が
+`Authorization`を使っていないことを照合する。
