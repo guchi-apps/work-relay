@@ -2,7 +2,7 @@
 // サーバー（TypeScript）とiOSアプリ（Swift）で揃えておく値・判定が食い違っていないかを照合する。
 // Xcodeの無い環境（subpc・CI）でも動く。`pnpm test` の `src/lib/native-auth/ios-consistency.test.ts`
 // が同じ関数を使う。単独でも `node ios/scripts/check-consistency.mjs` で実行できる。
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -112,6 +112,19 @@ export function checkConsistency() {
   if (!importer.includes("api/share/inbox")) problems.push("ShareImporter.swift が /api/share/inbox を呼んでいません");
   if (/Authorization|SHARE_SHORTCUT_TOKEN/.test(importer.replace(/\/\/.*$/gm, ""))) {
     problems.push("ShareImporter.swift が Authorization / SHARE_SHORTCUT_TOKEN を使っています（セッション認証にする）");
+  }
+
+  // SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES のため、@Published / ObservableObject を使う
+  // ファイルは import Combine が要る（SwiftUI経由では見えない）。無いとアーカイブで
+  // 「missing import of defining module 'Combine'」になり、Xcodeの無いsubpc・CIでは気付けない（#361）
+  const swiftSources = readdirSync(join(root, "ios"), { recursive: true })
+    .filter((path) => path.endsWith(".swift"))
+    .map((path) => join("ios", path));
+  for (const file of swiftSources) {
+    const source = read(file);
+    if (/@Published|ObservableObject/.test(source) && !/^import Combine$/m.test(source)) {
+      problems.push(`${file} が @Published / ObservableObject を使っているのに import Combine がありません`);
+    }
   }
 
   // 開発用のURLをコミットしていない
