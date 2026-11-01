@@ -22,9 +22,25 @@ model Clip {
   @@map("clips")
 }
 
-enum IndustryBusiness {
-  DELIVERY
-  LOCKER
+/// 事業区分のマスタ（エクステリア／ロッカー／AI関連）。区分の増減はこの表で行う。
+/// 初期値は`20261101120000_industry_business_master`が投入し、コード側の`DEFAULT_BUSINESSES`と揃える。
+model IndustryBusiness {
+  key           String   @id @db.VarChar(32)
+  label         String   @db.VarChar(100)
+  shortLabel    String   @db.VarChar(50)
+  hint          String   @default("") @db.VarChar(255)
+  scope         String   @db.Text
+  defaultPolicy String   @db.Text
+  color         String   @default("teal") @db.VarChar(16)
+  sortOrder     Int      @default(0)
+  feeds         Json
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+
+  informations IndustryInformation[]
+  policies     CollectionSearchPolicy[]
+
+  @@map("industry_business")
 }
 
 enum IndustryInformationType {
@@ -89,7 +105,8 @@ enum IndustryPeriodScope {
 
 model IndustryInformation {
   id               String                  @id @default(cuid())
-  business         IndustryBusiness
+  business         String                  @db.VarChar(32)
+  businessDef      IndustryBusiness        @relation(fields: [business], references: [key])
   informationType  IndustryInformationType
   title            String
   originalUrl      String                  @db.Text
@@ -172,13 +189,6 @@ enum AnalysisFailureKind {
   TIMEOUT
 }
 
-/// AIが判定した関連性。`OUT_OF_SCOPE`は芸能・スポーツ等のノイズ記事。
-enum AnalysisRelevance {
-  DELIVERY
-  LOCKER
-  OUT_OF_SCOPE
-}
-
 model ArticleAnalysisJob {
   id             String               @id @default(cuid())
   articleId      String
@@ -212,7 +222,8 @@ model ArticleAnalysis {
   article         IndustryInformation @relation(fields: [articleId], references: [id], onDelete: Cascade)
   jobId           String              @unique
   job             ArticleAnalysisJob  @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  relevance       AnalysisRelevance
+  /// AIが判定した関連性。事業区分のキー、または`OUT_OF_SCOPE`（芸能・スポーツ等のノイズ記事）。
+  relevance       String              @db.VarChar(32)
   confidence      Float
   reason          String              @db.Text
   noiseReason     String?             @db.Text
@@ -334,9 +345,10 @@ model CollectionSearchJob {
   @@map("collection_search_jobs")
 }
 
-// 業界ニュース収集でAIが使う検索・判定基準。事業（DELIVERY/LOCKER）ごとに1件ずつ持つ（#211）。
+// 業界ニュース収集でAIが使う検索・判定基準。事業区分ごとに1件ずつ持つ（#211）。
 model CollectionSearchPolicy {
-  business           IndustryBusiness @id
+  business           String           @id @db.VarChar(32)
+  businessDef        IndustryBusiness @relation(fields: [business], references: [key])
   policy             String           @db.Text
   pendingInstruction String?          @db.Text
   updatedAt          DateTime         @updatedAt

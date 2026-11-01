@@ -27,7 +27,7 @@ function article(overrides: Partial<NewsMailArticle> = {}): NewsMailArticle {
     title: "パナソニック、宅配ボックスに後付けの通知ユニット",
     originalUrl: "https://example.com/news/1",
     sourceName: "パナソニック ニュースリリース",
-    business: "DELIVERY",
+    business: "EXTERIOR",
     isPrimarySource: true,
     importance: "HIGH",
     publishedAt: new Date("2026-09-02T01:00:00Z"),
@@ -74,8 +74,9 @@ describe("countNewsMailArticles", () => {
     );
     assert.equal(counts.total, 3);
     assert.deepEqual(counts.byBusiness, [
-      { business: "DELIVERY", count: 1 },
+      { business: "EXTERIOR", count: 1 },
       { business: "LOCKER", count: 2 },
+      { business: "AI", count: 0 },
     ]);
     assert.deepEqual(counts.byImportance, [
       { importance: "HIGH", count: 1 },

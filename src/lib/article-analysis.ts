@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { canAcceptReport, classifyFailure, FAILURE_MESSAGE_LIMIT, isDuplicateJobError, LEASE_SECONDS, MAX_CLAIM_JOBS, shouldAutoExcludeFromWeekly, truncateFailureMessage, type FailureKindValue, type FailureSignal, type JobStatusValue } from "@/lib/analysis-job-rules";
 import { claimWeeklyBriefJobs, listActiveWeeklyBriefJobs, releaseExpiredWeeklyBriefLeases, reportWeeklyBriefResult } from "@/lib/weekly-brief";
 import { claimCollectionSearchJobs, releaseExpiredCollectionSearchLeases, reportCollectionSearchResult } from "@/lib/collection-search";
+import { getBusinesses } from "@/lib/businesses";
 import { buildAnalysisPrompt, buildOutputSchema, parseAnalysisPayload, parseAnnouncedOn, type AnalysisImportanceValue, type AnalysisPeerArticle, type AnalysisRelevanceValue } from "@/lib/analysis-prompt";
 import { getWeekRange, weekCondition } from "@/lib/industry-information";
 
@@ -98,6 +99,7 @@ export async function claimAnalysisJobs(input: ClaimInput, now = new Date()): Pr
   const leaseExpiresAt = new Date(now.getTime() + LEASE_SECONDS * 1000);
   const claimed: ClaimedJob[] = [];
 
+  const businesses = await getBusinesses();
   for (const candidate of candidates) {
     const updated = await prisma.articleAnalysisJob.updateMany({ where: { id: candidate.id, status: "QUEUED" }, data: { status: "RUNNING", startedAt: now, leaseExpiresAt, workerHost: input.host } });
     if (updated.count === 0) continue;
@@ -114,8 +116,8 @@ export async function claimAnalysisJobs(input: ClaimInput, now = new Date()): Pr
       kind: "article",
       articleId: article.id,
       articleTitle: article.title,
-      prompt: buildAnalysisPrompt(article, await loadWeekPeers(article.id, article.publishedAt ?? article.occurredAt ?? article.collectedAt, now)),
-      outputSchema: buildOutputSchema(),
+      prompt: buildAnalysisPrompt(article, await loadWeekPeers(article.id, article.publishedAt ?? article.occurredAt ?? article.collectedAt, now), businesses),
+      outputSchema: buildOutputSchema(businesses),
       leaseExpiresAt: leaseExpiresAt.toISOString(),
     });
   }
@@ -183,7 +185,7 @@ export async function reportAnalysisResult(input: ReportInput, now = new Date())
     return { ok: true, status: classification.status };
   }
 
-  const parsed = parseAnalysisPayload(input.result);
+  const parsed = parseAnalysisPayload(input.result, await getBusinesses());
   if (!parsed.ok) {
     const message = truncateFailureMessage(`解析結果を読み取れませんでした: ${parsed.error}`);
     await finishJob(job.id, job.articleId, "FAILED", now, { failureKind: "INVALID_OUTPUT", failureMessage: message });
@@ -329,7 +331,7 @@ export async function getAnalysisOverview(): Promise<AnalysisOverview> {
   return { queued: jobCount("QUEUED"), running: jobCount("RUNNING"), briefQueued: briefCount("QUEUED"), briefRunning: briefCount("RUNNING"), failed: articleCount("FAILED"), authRequired: articleCount("AUTH_REQUIRED"), worker };
 }
 
-type QueueArticle = { id: string; title: string; business: "DELIVERY" | "LOCKER" };
+type QueueArticle = { id: string; title: string; business: string };
 
 /** 解析状況画面（#137）の1行。記事の解析と週の総括を同じ形で並べる。 */
 export type QueueItem = {

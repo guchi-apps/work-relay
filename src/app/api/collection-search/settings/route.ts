@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
+import { getBusinesses, normalizeBusinessKey } from "@/lib/businesses";
 import { getCollectionSearchPolicies, requestCollectionSearchPolicyAdjustment, type CollectionSearchBusiness, type CollectionSearchPolicyView } from "@/lib/collection-search-settings";
 
 export const runtime = "nodejs";
@@ -17,7 +18,7 @@ export async function GET() {
   const denied = await authorized();
   if (denied) return denied;
   const policies = await getCollectionSearchPolicies();
-  return NextResponse.json({ DELIVERY: serialize(policies.DELIVERY), LOCKER: serialize(policies.LOCKER) }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json(Object.fromEntries(Object.entries(policies).map(([key, value]) => [key, serialize(value)])), { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function POST(request: Request) {
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
   if (denied) return denied;
   const body: unknown = await request.json().catch(() => null);
   const parsed = body as { business?: unknown; instruction?: unknown } | null;
-  const business: CollectionSearchBusiness | null = parsed?.business === "DELIVERY" || parsed?.business === "LOCKER" ? parsed.business : null;
+  const business: CollectionSearchBusiness | null = normalizeBusinessKey(await getBusinesses(), parsed?.business);
   const instruction = typeof parsed?.instruction === "string" ? parsed.instruction : "";
   if (!business) return NextResponse.json({ error: "invalid_business" }, { status: 400 });
   const value = await requestCollectionSearchPolicyAdjustment(business, instruction);

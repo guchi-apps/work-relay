@@ -11,11 +11,11 @@
  * OpenAI APIを直接呼ばない、というIssueの前提）。
  */
 
-/** 解析の観点。宅配事業・ロッカー事業それぞれで「何を見るか」をプロンプトに埋め込む。 */
-export const DELIVERY_SCOPE = "宅配ボックス、郵便ポスト、機能門柱、置き配、防犯（なりすまし受け取り・盗難）、施工性、配送ロボット／ドローン配送";
-export const LOCKER_SCOPE = "マルチロッカー、セルフ発送機、PUDO・SMARI・Amazon Hub等の受取／発送／返品、ロッカーの運用・設置・事業性";
+import { DEFAULT_BUSINESSES, businessShortLabel, businessKeys, findBusiness, sortBusinesses, type BusinessDef } from "./business-defs.ts";
 
-export type AnalysisRelevanceValue = "DELIVERY" | "LOCKER" | "OUT_OF_SCOPE";
+/** 判定結果。事業区分のキー（エクステリア・ロッカー・AI関連など。マスタが正）か、対象外。 */
+export type AnalysisRelevanceValue = string;
+export const OUT_OF_SCOPE = "OUT_OF_SCOPE";
 export type AnalysisImportanceValue = "HIGH" | "MEDIUM" | "REFERENCE";
 
 export type AnalysisDuplicate = { title: string; url: string | null; reason: string };
@@ -48,7 +48,7 @@ export type AnalysisTargetArticle = {
   originalUrl: string;
   sourceName: string;
   publisher: string | null;
-  business: "DELIVERY" | "LOCKER";
+  business: string;
   publishedAt: Date | null;
   collectedAt: Date;
   content: string | null;
@@ -56,7 +56,7 @@ export type AnalysisTargetArticle = {
 };
 
 /** 重複判定のために渡す、同じ週に登録済みの記事。 */
-export type AnalysisPeerArticle = { title: string; originalUrl: string; business: "DELIVERY" | "LOCKER"; publishedAt: Date | null; summary: string | null };
+export type AnalysisPeerArticle = { title: string; originalUrl: string; business: string; publishedAt: Date | null; summary: string | null };
 
 /** 記事本文をプロンプトへ載せる上限。長い記事で1回の実行が枠を食い潰さないよう切る。 */
 export const CONTENT_PROMPT_LIMIT = 8000;
@@ -71,21 +71,21 @@ function isoDate(date: Date | null): string {
  * 記事本文・原典URL・取得日・同じ週の既存記事を入力に含める。出力の形はJSON Schemaで縛るため、
  * ここでは「何を見て何を書くか」だけを指示し、キー名の列挙は繰り返さない。
  */
-export function buildAnalysisPrompt(article: AnalysisTargetArticle, peers: AnalysisPeerArticle[]): string {
+export function buildAnalysisPrompt(article: AnalysisTargetArticle, peers: AnalysisPeerArticle[], businesses: BusinessDef[] = DEFAULT_BUSINESSES): string {
+  const defs = sortBusinesses(businesses);
   const content = article.content ? article.content.slice(0, CONTENT_PROMPT_LIMIT) : null;
   const peerLines = peers.length
-    ? peers.map((peer, index) => `${index + 1}. [${peer.business === "DELIVERY" ? "宅配" : "ロッカー"}] ${peer.title}（公開日 ${isoDate(peer.publishedAt)} / ${peer.originalUrl}）${peer.summary ? `\n   要約: ${peer.summary}` : ""}`).join("\n")
+    ? peers.map((peer, index) => `${index + 1}. [${businessShortLabel(defs, peer.business)}] ${peer.title}（公開日 ${isoDate(peer.publishedAt)} / ${peer.originalUrl}）${peer.summary ? `\n   要約: ${peer.summary}` : ""}`).join("\n")
     : "（同じ週に登録済みの記事はありません）";
 
   return [
-    "あなたは戸建て・集合住宅向けの宅配ボックス／機能門柱と、マルチロッカー事業を手がけるメーカーの商品企画担当を支援するリサーチャーです。",
+    "あなたは戸建て・集合住宅向けのエクステリア（宅配ボックス・ポスト・機能門柱）とマルチロッカー事業を手がけ、生成AI（Gemini・Copilot）の業務活用も追うメーカーの商品企画担当を支援するリサーチャーです。",
     "以下のニュース記事を読み、指定されたJSON Schemaに合うJSONだけを最終応答として返してください。説明文・前置き・コードフェンスは付けないでください。",
     "",
     "## 判定の観点",
     "",
-    `- 宅配事業（DELIVERY）: ${DELIVERY_SCOPE}`,
-    `- ロッカー事業（LOCKER）: ${LOCKER_SCOPE}`,
-    "- 対象外（OUT_OF_SCOPE）: 上のどちらにも実質的に関係しない記事。芸能・スポーツ・事件など、宅配やロッカーが話題の背景や小道具としてしか登場しないものは対象外にしてください。語句が一致するだけで対象に含めないこと。",
+    ...defs.map((def) => `- ${def.label}（${def.key}）: ${def.scope}`),
+    "- 対象外（OUT_OF_SCOPE）: 上のどの区分にも実質的に関係しない記事。芸能・スポーツ・事件など、各区分の話題が背景や小道具としてしか登場しないものは対象外にしてください。語句が一致するだけで対象に含めないこと。",
     "",
     "判定は必ず理由（reason）と信頼度（confidence, 0〜1）を伴わせてください。対象外・誤分類だと判断した場合は、そう考えた根拠を noiseReason に書いてください。",
     "",
@@ -106,7 +106,7 @@ export function buildAnalysisPrompt(article: AnalysisTargetArticle, peers: Analy
     `- タイトル: ${article.title}`,
     `- 原典URL: ${article.originalUrl}`,
     `- 情報源: ${article.sourceName}${article.publisher ? `（発行元 ${article.publisher}）` : ""}`,
-    `- 登録時の事業区分（暫定・誤っている可能性がある）: ${article.business === "DELIVERY" ? "宅配事業" : "ロッカー事業"}`,
+    `- 登録時の事業区分（暫定・誤っている可能性がある）: ${findBusiness(defs, article.business)?.label ?? article.business}`,
     `- 公開日: ${isoDate(article.publishedAt)}`,
     `- 取得日: ${isoDate(article.collectedAt)}`,
     article.summary ? `- 登録済みの要約: ${article.summary}` : "- 登録済みの要約: なし",
@@ -130,14 +130,14 @@ export function buildAnalysisPrompt(article: AnalysisTargetArticle, peers: Analy
  * `Extra required key '...' supplied`という分かりにくい400（`invalid_json_schema`）で、
  * モデルを呼ぶ前に弾かれる。項目名が可変のものは`{ name, value }`の配列で表す。
  */
-export function buildOutputSchema(): Record<string, unknown> {
+export function buildOutputSchema(businesses: BusinessDef[] = DEFAULT_BUSINESSES): Record<string, unknown> {
   const nullableString = { type: ["string", "null"] };
   return {
     type: "object",
     additionalProperties: false,
     required: ["relevance", "confidence", "reason", "noiseReason", "summary", "fullSummary", "announcedOn", "regions", "metrics", "implications", "importance", "duplicates", "relatedFindings"],
     properties: {
-      relevance: { type: "string", enum: ["DELIVERY", "LOCKER", "OUT_OF_SCOPE"] },
+      relevance: { type: "string", enum: [...businessKeys(businesses), OUT_OF_SCOPE] },
       confidence: { type: "number", minimum: 0, maximum: 1 },
       reason: { type: "string" },
       noiseReason: nullableString,
@@ -175,7 +175,6 @@ export function buildOutputSchema(): Record<string, unknown> {
 
 export type ParseResult = { ok: true; value: AnalysisPayload } | { ok: false; error: string };
 
-const RELEVANCE_VALUES: AnalysisRelevanceValue[] = ["DELIVERY", "LOCKER", "OUT_OF_SCOPE"];
 const IMPORTANCE_VALUES: AnalysisImportanceValue[] = ["HIGH", "MEDIUM", "REFERENCE"];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -237,11 +236,11 @@ function relatedFindings(value: unknown): AnalysisRelatedFinding[] {
  * 必須（relevance・confidence・reason・summary・importance）が欠けていたら保存しない。
  * それ以外は「無い」として扱い、記事1件ぶんの解析を丸ごと捨てないようにする。
  */
-export function parseAnalysisPayload(raw: unknown): ParseResult {
+export function parseAnalysisPayload(raw: unknown, businesses: BusinessDef[] = DEFAULT_BUSINESSES): ParseResult {
   if (!isRecord(raw)) return { ok: false, error: "解析結果がオブジェクトではありません" };
 
   const relevance = raw.relevance;
-  if (typeof relevance !== "string" || !RELEVANCE_VALUES.includes(relevance as AnalysisRelevanceValue)) {
+  if (typeof relevance !== "string" || ![...businessKeys(businesses), OUT_OF_SCOPE].includes(relevance)) {
     return { ok: false, error: `relevanceが不正です: ${String(relevance)}` };
   }
   const confidence = typeof raw.confidence === "number" && Number.isFinite(raw.confidence) ? Math.min(1, Math.max(0, raw.confidence)) : null;

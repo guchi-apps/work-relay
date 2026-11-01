@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/db";
 import { canAcceptReport, classifyFailure, isDuplicateJobError, LEASE_SECONDS, truncateFailureMessage, type FailureKindValue, type FailureSignal, type JobStatusValue } from "@/lib/analysis-job-rules";
 import { importWeeklyReport, type WeeklyReportArticle } from "@/lib/collection";
-import { buildCollectionSearchPrompt, buildCollectionSearchSchema, COLLECTION_SEARCH_TIMEOUT_SECONDS, parseCollectionSearchPayload } from "@/lib/collection-search-prompt";
+import { getBusinesses, businessKeys } from "@/lib/businesses";
+import { buildCollectionSearchPrompt, buildCollectionSearchSchema, COLLECTION_SEARCH_TIMEOUT_SECONDS, parseCollectionSearchPayload, type CollectionSearchPolicyContext } from "@/lib/collection-search-prompt";
 import { formatIsoDate } from "@/lib/jst-week";
 import { getWeekRange } from "@/lib/jst-week";
 import { weekCondition } from "@/lib/industry-information";
@@ -85,24 +86,25 @@ export async function claimCollectionSearchJobs(host: string, take: number, now 
     if (updated.count === 0) continue;
     const policies = await getCollectionSearchPolicies();
     const range = getWeekRange(0, now);
-    const [rejectedDelivery, rejectedLocker] = await Promise.all(
-      (["DELIVERY", "LOCKER"] as const).map((business) =>
-        prisma.industryInformation.findMany({ where: { business, reviewedAt: { not: null }, weeklyCandidate: false }, orderBy: { reviewedAt: "desc" }, take: 10, select: { title: true, reviewNote: true } }),
-      ),
-    );
-    const [existingDelivery, existingLocker] = await Promise.all(
-      (["DELIVERY", "LOCKER"] as const).map((business) =>
-        prisma.industryInformation.findMany({ where: { AND: [{ business }, weekCondition(range)] }, orderBy: { collectedAt: "desc" }, take: 30, select: { title: true, summary: true, normalizedUrl: true } }),
-      ),
-    );
+    const businesses = await getBusinesses();
+    const context: CollectionSearchPolicyContext = {};
+    for (const def of businesses) {
+      const [rejected, existing] = await Promise.all([
+        prisma.industryInformation.findMany({ where: { business: def.key, reviewedAt: { not: null }, weeklyCandidate: false }, orderBy: { reviewedAt: "desc" }, take: 10, select: { title: true, reviewNote: true } }),
+        prisma.industryInformation.findMany({ where: { AND: [{ business: def.key }, weekCondition(range)] }, orderBy: { collectedAt: "desc" }, take: 30, select: { title: true, summary: true, normalizedUrl: true } }),
+      ]);
+      context[def.key] = {
+        policy: policies[def.key].policy,
+        instruction: policies[def.key].pendingInstruction,
+        rejectedArticles: rejected.map((item) => ({ title: item.title, reason: item.reviewNote })),
+        existingArticles: existing.map((item) => ({ title: item.title, summary: item.summary, url: item.normalizedUrl })),
+      };
+    }
     claimed.push({
       jobId: candidate.id,
       label: `${formatIsoDate(now)} の業界ニュース収集`,
-      prompt: buildCollectionSearchPrompt(now, {
-        delivery: { policy: policies.DELIVERY.policy, instruction: policies.DELIVERY.pendingInstruction, rejectedArticles: rejectedDelivery.map((item) => ({ title: item.title, reason: item.reviewNote })), existingArticles: existingDelivery.map((item) => ({ title: item.title, summary: item.summary, url: item.normalizedUrl })) },
-        locker: { policy: policies.LOCKER.policy, instruction: policies.LOCKER.pendingInstruction, rejectedArticles: rejectedLocker.map((item) => ({ title: item.title, reason: item.reviewNote })), existingArticles: existingLocker.map((item) => ({ title: item.title, summary: item.summary, url: item.normalizedUrl })) },
-      }),
-      outputSchema: buildCollectionSearchSchema(),
+      prompt: buildCollectionSearchPrompt(now, context, businesses),
+      outputSchema: buildCollectionSearchSchema(businesses),
       leaseExpiresAt: leaseExpiresAt.toISOString(),
       timeoutSeconds: COLLECTION_SEARCH_TIMEOUT_SECONDS,
     });
@@ -143,14 +145,14 @@ export async function reportCollectionSearchResult(input: ReportCollectionSearch
     return { ok: true, status: classification.status };
   }
 
-  const parsed = parseCollectionSearchPayload(input.result);
+  const businesses = await getBusinesses();
+  const parsed = parseCollectionSearchPayload(input.result, businesses);
   if (!parsed.ok) {
     await finishFailed(job.id, "FAILED", now, { failureKind: "INVALID_OUTPUT", failureMessage: truncateFailureMessage(`収集の結果を読み取れませんでした: ${parsed.error}`) }, { codexAuthMode: input.codexAuthMode, durationMs: input.durationMs });
     return { ok: true, status: "FAILED" };
   }
 
-  if (parsed.nextPolicyDelivery) await saveCollectionSearchPolicy("DELIVERY", parsed.nextPolicyDelivery);
-  if (parsed.nextPolicyLocker) await saveCollectionSearchPolicy("LOCKER", parsed.nextPolicyLocker);
+  for (const [business, policy] of Object.entries(parsed.nextPolicies)) await saveCollectionSearchPolicy(business, policy);
 
   let imported;
   try {
@@ -190,7 +192,7 @@ export async function reportCollectionSearchResult(input: ReportCollectionSearch
         checkedRegions: parsed.searchReport.checkedRegions,
         checkedSources: parsed.searchReport.checkedSources,
         checkedThemes: parsed.searchReport.checkedThemes,
-        businessCounts: ["DELIVERY", "LOCKER"].map((business) => ({ business, count: parsed.articles.filter((article) => article.business === business).length })),
+        businessCounts: businessKeys(businesses).map((business) => ({ business, count: parsed.articles.filter((article) => article.business === business).length })),
         informationTypeCounts: [...new Set(parsed.articles.map((article) => article.informationType))].map((informationType) => ({ informationType, count: parsed.articles.filter((article) => article.informationType === informationType).length })),
         overseasCount: parsed.articles.filter((article) => article.informationType === "OVERSEAS_CASE" || article.region !== null && article.region !== "日本").length,
         snsCount: parsed.articles.filter((article) => article.informationType === "SOCIAL_TREND").length,

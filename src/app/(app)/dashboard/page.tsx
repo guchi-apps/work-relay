@@ -4,6 +4,7 @@ import AnalysisStatusStrip from "@/components/AnalysisStatusStrip";
 import ArticleAnalysisBlock from "@/components/ArticleAnalysisBlock";
 import HeaderUserMenu from "@/components/HeaderUserMenu";
 import { getCurrentUser } from "@/lib/auth";
+import { businessLabel, businessParam, getBusinesses, parseBusinessParam, sortBusinesses, type BusinessDef } from "@/lib/businesses";
 import { getAnalysisOverview } from "@/lib/article-analysis";
 import SwipeWeekNav from "@/components/SwipeWeekNav";
 import WeekCalendarPicker from "@/components/WeekCalendarPicker";
@@ -14,9 +15,6 @@ import { countPendingReview, OLDEST_WEEK_OFFSET, buildWeekCalendarMonths, format
 // 登録直後に開いても古い内容を返さないよう、毎リクエストでDBを読む。
 export const dynamic = "force-dynamic";
 
-type Business = "DELIVERY" | "LOCKER";
-
-const labels: Record<Business, string> = { DELIVERY: "宅配事業", LOCKER: "ロッカー事業" };
 const importanceLabels = { HIGH: "高", MEDIUM: "中", REFERENCE: "参考" } as const;
 
 // 直近の収集ランと比べ、このカードが「新規追加」「内容更新」のどちらかを判定する（#43）。
@@ -29,7 +27,7 @@ function cardStatus(item: IndustryInformationListItem, latestRunId: string | nul
   return null;
 }
 
-function Card({ item, latestRunId }: { item: IndustryInformationListItem; latestRunId: string | null }) {
+function Card({ item, latestRunId, businesses }: { item: IndustryInformationListItem; latestRunId: string | null; businesses: BusinessDef[] }) {
   const supplement = item.periodScope === "PAST_30_DAYS_SUPPLEMENT";
   const keywords = toStringArray(item.keywords);
   const tags = toStringArray(item.tags);
@@ -45,7 +43,7 @@ function Card({ item, latestRunId }: { item: IndustryInformationListItem; latest
     </div>
     <p className="summary">{item.summary ?? "要約は登録されていません。"}</p>
     <dl className="details"><div><dt>主な数値・事実</dt><dd>{formatMetrics(item.extractedMetrics) ?? "—"}</dd></div><div><dt>企画・設計への示唆</dt><dd>{item.implications ?? "—"}</dd></div><div><dt>キーワード</dt><dd>{keywords.length ? keywords.join("／") : "—"}</dd></div></dl>
-    <ArticleAnalysisBlock item={item} />
+    <ArticleAnalysisBlock item={item} businesses={businesses} />
     <div className="news-foot"><div className="tags">{item.targetCompany && <b>{item.targetCompany}</b>}{item.targetProduct && <span>{item.targetProduct}</span>}{tags.map((tag) => <span key={tag}>{tag}</span>)}</div><a href={item.originalUrl} target="_blank" rel="noreferrer">元記事 ↗</a></div>
     {mergedSources.length > 0 && <details className="merge-info">
       <summary>更新履歴を見る</summary>
@@ -61,8 +59,8 @@ function Card({ item, latestRunId }: { item: IndustryInformationListItem; latest
   </article>;
 }
 
-function Section({ business, items, latestRunId }: { business: Business; items: IndustryInformationListItem[]; latestRunId: string | null }) {
-  return <section className="news-section"><div className="section-heading section-line"><div className="section-title"><i className={business === "LOCKER" ? "orange" : ""} /><h2>{labels[business]}</h2><span>{items.length}件</span></div><p>{business === "DELIVERY" ? "戸建て · 宅配ボックス · 機能門柱 · 外構" : "マルチロッカー · セルフ発送 · 競合・類似サービス"}</p></div><div className="news-list">{items.map((item) => <Card key={item.id} item={item} latestRunId={latestRunId} />)}</div></section>;
+function Section({ def, businesses, items, latestRunId }: { def: BusinessDef; businesses: BusinessDef[]; items: IndustryInformationListItem[]; latestRunId: string | null }) {
+  return <section className="news-section"><div className="section-heading section-line"><div className="section-title"><i className={def.color === "teal" ? "" : def.color} /><h2>{def.label}</h2><span>{items.length}件</span></div><p>{def.hint}</p></div><div className="news-list">{items.map((item) => <Card key={item.id} item={item} latestRunId={latestRunId} businesses={businesses} />)}</div></section>;
 }
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
@@ -70,7 +68,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   if (user.status === "unavailable") return <section className="content"><div className="empty-state"><p>認証状態を確認できませんでした。しばらくしてから再読み込みしてください。</p></div></section>;
   if (user.status === "unauthenticated") redirect("/login");
   const params = await searchParams;
-  const business: BusinessParam = params.business === "delivery" || params.business === "locker" ? params.business : "all";
+  const businesses = sortBusinesses(await getBusinesses());
+  const business: BusinessParam = parseBusinessParam(businesses, params.business);
   const source: SourceParam = params.source === "primary" || params.source === "related" ? params.source : "all";
   const importance: ImportanceParam = params.importance === "high" || params.importance === "medium" || params.importance === "reference" ? params.importance : "all";
   const analysis: AnalysisParam = params.analysis === "pending" || params.analysis === "analyzed" || params.analysis === "attention" ? params.analysis : "all";
@@ -91,6 +90,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const weekHrefs = Object.fromEntries(Array.from({ length: -OLDEST_WEEK_OFFSET + 1 }, (_, index) => OLDEST_WEEK_OFFSET + index).map((offset) => [offset, query(offset)]));
   const pointTitle = weekOffset === 0 ? "今週の要点" : "この週の要点";
   // 要点は登録データの先頭（重要度順）を事業ごとに1件ずつ拾う。文言は持たない。
-  const keyPoints = (["DELIVERY", "LOCKER"] as const).map((key) => ({ business: key, item: visible.find((news) => news.business === key) })).filter((point): point is { business: Business; item: IndustryInformationListItem } => Boolean(point.item));
-  return <section className="content"><SwipeWeekNav prevHref={prevHref} nextHref={nextHref} /><header className="page-header"><div><p className="eyebrow">WEEKLY INDUSTRY BRIEF</p><h1>業界ニュース</h1></div><div className="top-actions"><HeaderUserMenu><span>{lastCollectedAt ? `最終更新 ${formatDateTime(lastCollectedAt)}` : "未登録"}</span></HeaderUserMenu></div></header>{pendingReviewCount > 0 && <Link className="new-banner" href="/dashboard/inbox"><span className="dot">📥</span><span className="body"><p className="headline">新着記事が{pendingReviewCount}件あります</p><p className="sub">仕分け待ちの記事があります。採用・不採用を決めると週報の候補に反映されます。</p></span><span className="go">確認する →</span></Link>}<AnalysisStatusStrip overview={overview} /><div className="week-nav"><a href={query(Math.max(OLDEST_WEEK_OFFSET, weekOffset - 1))}>‹</a><WeekCalendarPicker months={calendarMonths} currentWeekOffset={weekOffset} currentLabel={formatWeekLabel(currentWeekRange)} currentWeekNumber={getIsoWeekNumber(currentWeekRange.start)} weekHrefs={weekHrefs} /><a className={weekOffset === 0 ? "disabled" : ""} href={query(Math.min(0, weekOffset + 1))}>›</a></div>{keyPoints.length > 0 && <section className="key-points"><div className="section-heading"><h2>{pointTitle}</h2><span>{visible.length}件 · 重要度順</span></div><div className="key-grid">{keyPoints.map((point, index) => <div key={point.business}><small>{labels[point.business]}　{String(index + 1).padStart(2, "0")}</small><p>{point.item.title}</p></div>)}</div></section>}<form className="filters" method="get"><input type="hidden" name="week" value={weekOffset} /><label>事業区分<select name="business" defaultValue={business}><option value="all">すべて</option><option value="delivery">宅配事業</option><option value="locker">ロッカー事業</option></select></label><label>情報区分<select name="source" defaultValue={source}><option value="all">すべて</option><option value="primary">一次情報</option><option value="related">関連記事</option></select></label><label>重要度<select name="importance" defaultValue={importance}><option value="all">すべて</option><option value="high">高</option><option value="medium">中</option><option value="reference">参考</option></select></label><label>AI解析<select name="analysis" defaultValue={analysis}><option value="all">すべて</option><option value="pending">未解析・待ち</option><option value="analyzed">解析済み</option><option value="attention">失敗・認証待ち</option></select></label><label className="toggle"><input type="checkbox" name="excluded" value="show" defaultChecked={!hideExcluded} /><span>不採用・対象外も表示</span></label><label className="keyword">企業・商品<input name="keyword" placeholder="キーワード" defaultValue={keyword} /></label><button type="submit">絞り込む</button></form><Section business="DELIVERY" items={visible.filter((item) => item.business === "DELIVERY")} latestRunId={latestRunId} /><Section business="LOCKER" items={visible.filter((item) => item.business === "LOCKER")} latestRunId={latestRunId} />{visible.length === 0 && <div className="no-results">条件に一致する情報はありません。期間や絞り込み条件を変えてお試しください。</div>}<p className="note">※ 要約は保存済みの調査結果を表示しています。転載記事は同一発表にまとめ、一次情報と関連記事を区別しています。</p></section>;
+  const keyPoints = businesses.map((def) => ({ business: def.key, item: visible.find((news) => news.business === def.key) })).filter((point): point is { business: string; item: IndustryInformationListItem } => Boolean(point.item));
+  return <section className="content"><SwipeWeekNav prevHref={prevHref} nextHref={nextHref} /><header className="page-header"><div><p className="eyebrow">WEEKLY INDUSTRY BRIEF</p><h1>業界ニュース</h1></div><div className="top-actions"><HeaderUserMenu><span>{lastCollectedAt ? `最終更新 ${formatDateTime(lastCollectedAt)}` : "未登録"}</span></HeaderUserMenu></div></header>{pendingReviewCount > 0 && <Link className="new-banner" href="/dashboard/inbox"><span className="dot">📥</span><span className="body"><p className="headline">新着記事が{pendingReviewCount}件あります</p><p className="sub">仕分け待ちの記事があります。採用・不採用を決めると週報の候補に反映されます。</p></span><span className="go">確認する →</span></Link>}<AnalysisStatusStrip overview={overview} /><div className="week-nav"><a href={query(Math.max(OLDEST_WEEK_OFFSET, weekOffset - 1))}>‹</a><WeekCalendarPicker months={calendarMonths} currentWeekOffset={weekOffset} currentLabel={formatWeekLabel(currentWeekRange)} currentWeekNumber={getIsoWeekNumber(currentWeekRange.start)} weekHrefs={weekHrefs} /><a className={weekOffset === 0 ? "disabled" : ""} href={query(Math.min(0, weekOffset + 1))}>›</a></div>{keyPoints.length > 0 && <section className="key-points"><div className="section-heading"><h2>{pointTitle}</h2><span>{visible.length}件 · 重要度順</span></div><div className="key-grid">{keyPoints.map((point, index) => <div key={point.business}><small>{businessLabel(businesses, point.business)}　{String(index + 1).padStart(2, "0")}</small><p>{point.item.title}</p></div>)}</div></section>}<form className="filters" method="get"><input type="hidden" name="week" value={weekOffset} /><label>事業区分<select name="business" defaultValue={business}><option value="all">すべて</option>{businesses.map((def) => <option key={def.key} value={businessParam(def.key)}>{def.label}</option>)}</select></label><label>情報区分<select name="source" defaultValue={source}><option value="all">すべて</option><option value="primary">一次情報</option><option value="related">関連記事</option></select></label><label>重要度<select name="importance" defaultValue={importance}><option value="all">すべて</option><option value="high">高</option><option value="medium">中</option><option value="reference">参考</option></select></label><label>AI解析<select name="analysis" defaultValue={analysis}><option value="all">すべて</option><option value="pending">未解析・待ち</option><option value="analyzed">解析済み</option><option value="attention">失敗・認証待ち</option></select></label><label className="toggle"><input type="checkbox" name="excluded" value="show" defaultChecked={!hideExcluded} /><span>不採用・対象外も表示</span></label><label className="keyword">企業・商品<input name="keyword" placeholder="キーワード" defaultValue={keyword} /></label><button type="submit">絞り込む</button></form>{businesses.map((def) => <Section key={def.key} def={def} businesses={businesses} items={visible.filter((item) => item.business === def.key)} latestRunId={latestRunId} />)}{visible.length === 0 && <div className="no-results">条件に一致する情報はありません。期間や絞り込み条件を変えてお試しください。</div>}<p className="note">※ 要約は保存済みの調査結果を表示しています。転載記事は同一発表にまとめ、一次情報と関連記事を区別しています。</p></section>;
 }

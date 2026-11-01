@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { buildFeeds, getBusinesses, zeroCounts, type BusinessDef } from "@/lib/businesses";
 import { decideDailyRunStatus, fitsNormalizedUrlColumn } from "@/lib/collection-rules";
 import { getWeekRange, weekCondition, toMergedSources, type MergedSource, type WeekRange } from "@/lib/industry-information";
 import { decideWeeklyCap, IMPORTANCE_RANK, type ImportanceValue, type PriorityFields } from "@/lib/triage";
@@ -14,24 +15,14 @@ const BUSINESS_WEEKLY_LIMIT = 15;
 // 週あたり上限の置換で隠した記事の`updateReason`（業界ニュース画面の「更新理由」に出る）。
 const REPLACED_UPDATE_REASON = "週あたり上限のため、優先度の高い記事に置き換えられました（週報候補から外しています）";
 const DAY_MS = 24 * 60 * 60 * 1000;
-type Business = "DELIVERY" | "LOCKER";
+type Business = string;
 type InformationType = "NEW_PRODUCT" | "COMPETITOR" | "INTRODUCTION_CASE" | "POLICY_SUBSIDY" | "MARKET_STATISTICS" | "USER_ISSUE" | "QUALITY_SAFETY" | "OVERSEAS_CASE" | "OTHER";
 type Candidate = { business: Business; title: string; url: string; sourceName: string; publisher: string | null; publishedAt: Date; isSupplemental: boolean; informationType: InformationType; importance: "HIGH" | "MEDIUM" | "REFERENCE"; keywords: string[]; tags: string[] };
 type InformationTypeValue = "NEW_PRODUCT" | "COMPETITOR" | "INTRODUCTION_CASE" | "RECRUITMENT_PARTNERSHIP" | "POLICY_SUBSIDY" | "MARKET_STATISTICS" | "USER_ISSUE" | "CONSTRUCTION" | "QUALITY_SAFETY" | "PATENT" | "ACADEMIC_RESEARCH" | "VIDEO" | "SOCIAL_TREND" | "OVERSEAS_CASE" | "OTHER";
 
 export type CollectionResult = { runId: string; status: "SUCCEEDED" | "PARTIAL" | "FAILED"; targetFrom: string; targetTo: string; supplementalFrom: string; fetchedCount: number; selectedCount: number; insertedCount: number; duplicateCount: number; mergedCount: number; excludedCount: number; failedCount: number; errors: string[] };
 
-function googleNewsRssUrl(query: string, lang: "ja" | "en"): string {
-  const region = lang === "ja" ? "hl=ja&gl=JP&ceid=JP:ja" : "hl=en&gl=US&ceid=US:en";
-  return `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&${region}`;
-}
-
-// RSS収集で使う検索クエリ（ハードコード、設定画面からは変更不可）。テーマごとのキーワード表示（#211）にも使う。
-export const FEEDS = [
-  { business: "DELIVERY" as const, name: "宅配・住宅設備の公開情報", query: "(宅配ボックス OR ポスト OR 機能門柱 OR 置き配) (新商品 OR 発表 OR 導入 OR 補助金)", lang: "ja" as const },
-  { business: "LOCKER" as const, name: "ロッカー・発送サービスの公開情報", query: "(PUDO OR SMARI OR Amazon Hub OR マルチエキューブ OR SPACER OR セルフ発送) (導入 OR 発表 OR 物流 OR 返品)", lang: "ja" as const },
-  { business: "LOCKER" as const, name: "海外ロッカー事例", query: "(parcel locker OR locker drop-off OR self-service shipping kiosk)", lang: "en" as const },
-].map((feed) => ({ ...feed, url: googleNewsRssUrl(feed.query, feed.lang) }));
+type Feed = ReturnType<typeof buildFeeds>[number];
 
 function field(item: string, name: string): string | null {
   const match = item.match(new RegExp(`<${name}(?:\\s[^>]*)?>([\\s\\S]*?)</${name}>`, "i"));
@@ -78,8 +69,8 @@ export type WeeklyReportInput = {
 
 export type WeeklyReportImportResult = CollectionResult & {
   // insertedCount+mergedCountの事業別内訳（新規追加・既存への統合更新の両方を含む）
-  businessCounts: { DELIVERY: number; LOCKER: number };
-  duplicateBusinessCounts: { DELIVERY: number; LOCKER: number };
+  businessCounts: Record<string, number>;
+  duplicateBusinessCounts: Record<string, number>;
 };
 
 function parseDate(value: string | null | undefined, fieldName: string): Date | null {
@@ -392,8 +383,9 @@ export async function importWeeklyReport(input: WeeklyReportInput): Promise<Week
   let duplicateCount = 0;
   let mergedCount = 0;
   let excludedCount = 0;
-  const businessCounts = { DELIVERY: 0, LOCKER: 0 };
-  const duplicateBusinessCounts = { DELIVERY: 0, LOCKER: 0 };
+  const businesses = await getBusinesses();
+  const businessCounts = zeroCounts(businesses);
+  const duplicateBusinessCounts = zeroCounts(businesses);
   const excludedArticles: ExcludedArticle[] = [];
   const seen = new Set<string>();
 
@@ -445,8 +437,8 @@ export async function importWeeklyReport(input: WeeklyReportInput): Promise<Week
 
 // --- 自動収集（Google News RSS、日次） ---------------------------------------------------
 
-function classify(title: string, business: Business): Pick<Candidate, "informationType" | "importance" | "keywords" | "tags"> {
-  const text = title.toLowerCase(); const tags = [business === "DELIVERY" ? "宅配事業" : "ロッカー事業"];
+function classify(title: string, business: BusinessDef): Pick<Candidate, "informationType" | "importance" | "keywords" | "tags"> {
+  const text = title.toLowerCase(); const tags = [business.label];
   if (/新商品|発売|新製品|発表/.test(text)) tags.push("新商品");
   if (/導入|採用|提携|設置/.test(text)) tags.push("導入事例");
   if (/補助金|制度|行政/.test(text)) tags.push("制度・補助金");
@@ -456,14 +448,14 @@ function classify(title: string, business: Business): Pick<Candidate, "informati
   return { informationType, importance, keywords: subjects.filter((subject) => title.includes(subject)), tags };
 }
 
-function parseFeed(xml: string, feed: (typeof FEEDS)[number], targetFrom: Date, targetTo: Date, supplementalFrom: Date): Candidate[] {
+function parseFeed(xml: string, feed: Feed, business: BusinessDef, targetFrom: Date, targetTo: Date, supplementalFrom: Date): Candidate[] {
   return [...xml.matchAll(/<item(?:\s[^>]*)?>([\s\S]*?)<\/item>/gi)].map((match) => match[1]).map((item) => {
     const title = field(item, "title"); const url = field(item, "link"); const dateText = field(item, "pubDate"); const publishedAt = dateText ? new Date(dateText) : null;
     if (!title || !url || !publishedAt || Number.isNaN(publishedAt.getTime()) || publishedAt < supplementalFrom || publishedAt > targetTo) return null;
     // `normalizedUrl`列（VarChar(512)）に収まらないURLは、登録で例外になる前にここで落とす（#170）。
     const normalizedUrl = normalizeUrl(url);
     if (!fitsNormalizedUrlColumn(normalizedUrl)) return null;
-    return { business: feed.business, title, url: normalizedUrl, sourceName: feed.name, publisher: field(item, "source"), publishedAt, isSupplemental: publishedAt < targetFrom, ...classify(title, feed.business) };
+    return { business: feed.business, title, url: normalizedUrl, sourceName: feed.name, publisher: field(item, "source"), publishedAt, isSupplemental: publishedAt < targetFrom, ...classify(title, business) };
   }).filter((item): item is Candidate => item !== null);
 }
 
@@ -478,7 +470,7 @@ function selectCandidates(candidates: Candidate[]): Candidate[] {
 }
 
 /**
- * 宅配・ロッカー業界情報の日次収集（#43。従来は週次のみだった`runWeeklyCollection`を改名）。
+ * 事業区分（エクステリア・ロッカー・AI関連）の業界情報の日次収集（#43。従来は週次のみだった`runWeeklyCollection`を改名）。
  * `targetFrom`は「今週（JST日曜0時始まり）の開始」に固定する。ローリング7日窓のままだと
  * 日次実行のたびに週境界をまたぐランが発生し、週内へ集約する前提が崩れるため。
  */
@@ -491,10 +483,12 @@ export async function runDailyCollection(now = new Date()): Promise<CollectionRe
   let feedFailures = 0;
   let articleFailures = 0;
   const candidates: Candidate[] = [];
-  for (const feed of FEEDS) try {
+  const businesses = await getBusinesses();
+  const feeds = buildFeeds(businesses);
+  for (const feed of feeds) try {
     const response = await fetch(feed.url, { headers: { "user-agent": "research-desk/0.1 (+public-rss-collector)" }, signal: AbortSignal.timeout(15_000) });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    candidates.push(...parseFeed(await response.text(), feed, targetFrom, targetTo, supplementalFrom));
+    candidates.push(...parseFeed(await response.text(), feed, businesses.find((item) => item.key === feed.business)!, targetFrom, targetTo, supplementalFrom));
   } catch (error) { feedFailures++; errors.push(`${feed.name}: ${error instanceof Error ? error.message : "取得に失敗しました"}`); }
   const selected = selectCandidates(candidates);
   let insertedCount = 0;
@@ -530,7 +524,7 @@ export async function runDailyCollection(now = new Date()): Promise<CollectionRe
       console.error(`日次収集: 記事の登録に失敗しました（run=${run.id}, url=${item.url}）`, error);
     }
   }
-  const status = decideDailyRunStatus({ feedCount: FEEDS.length, feedFailures, selectedCount: selected.length, articleFailures });
+  const status = decideDailyRunStatus({ feedCount: feeds.length, feedFailures, selectedCount: selected.length, articleFailures });
   await prisma.collectionRun.update({ where: { id: run.id }, data: { finishedAt: new Date(), status, fetchedCount: candidates.length, selectedCount: selected.length, insertedCount, duplicateCount, mergedCount, excludedCount, failedCount: errors.length, errors, excludedArticles: excludedArticles.length ? (excludedArticles as unknown as Prisma.InputJsonValue) : undefined } });
   return { runId: run.id, status, targetFrom: targetFrom.toISOString(), targetTo: targetTo.toISOString(), supplementalFrom: supplementalFrom.toISOString(), fetchedCount: candidates.length, selectedCount: selected.length, insertedCount, duplicateCount, mergedCount, excludedCount, failedCount: errors.length, errors };
 }

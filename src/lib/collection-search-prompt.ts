@@ -16,10 +16,10 @@
  */
 
 // `@/`のエイリアスは`node --test`の実行時には解決されないため、相対パス＋拡張子で書く。
-import { DELIVERY_SCOPE, LOCKER_SCOPE } from "./analysis-prompt.ts";
+import { DEFAULT_BUSINESSES, businessKeys, sortBusinesses, type BusinessDef } from "./business-defs.ts";
 import { formatIsoDate } from "./jst-week.ts";
 
-export type CollectedBusiness = "DELIVERY" | "LOCKER";
+export type CollectedBusiness = string;
 export type CollectedImportance = "HIGH" | "MEDIUM" | "REFERENCE";
 export type CollectedPeriodScope = "IN_SCOPE" | "PAST_30_DAYS_SUPPLEMENT";
 
@@ -45,10 +45,10 @@ export type CollectedInformationType = (typeof COLLECTED_INFORMATION_TYPES)[numb
 
 /**
  * 1回の収集で受け取る記事の上限。AIDE経由の週報登録（`/api/internal/weekly-report`）の
- * 入力上限（全体10件・各事業5件）に揃えてある。ChatGPT側と並べて品質を見比べるため、
- * 取り込み量の条件を同じにしている。
+ * 入力上限（各事業5件）に揃えてある。全体はAIDE中継の上限（10件）には縛られず、
+ * 事業が3区分になった（#362）ぶん15件にしている（この経路は`importWeeklyReport()`を直接呼ぶ）。
  */
-export const COLLECTION_SEARCH_ARTICLE_LIMIT = 10;
+export const COLLECTION_SEARCH_ARTICLE_LIMIT = 15;
 export const COLLECTION_SEARCH_ARTICLE_LIMIT_PER_BUSINESS = 5;
 
 /** 検索の対象期間（日）。古い記事で件数を埋めないため補充期間は設けない。 */
@@ -82,7 +82,8 @@ const METRICS_MAX_JSON_LENGTH = 2000;
  */
 export type RejectedArticle = { title: string; reason: string | null };
 export type CollectionSearchBusinessContext = { policy: string; instruction: string | null; rejectedArticles: RejectedArticle[]; existingArticles: { title: string; summary: string | null; url: string }[] };
-export type CollectionSearchPolicyContext = { delivery: CollectionSearchBusinessContext; locker: CollectionSearchBusinessContext };
+/** 事業区分のキー → その区分の判定基準・不採用記事・掲載済み記事。 */
+export type CollectionSearchPolicyContext = Record<string, CollectionSearchBusinessContext>;
 
 function businessPolicySection(label: string, business: CollectionSearchBusinessContext): string[] {
   return [
@@ -98,24 +99,23 @@ function businessPolicySection(label: string, business: CollectionSearchBusiness
   ];
 }
 
-export function buildCollectionSearchPrompt(now: Date, context?: CollectionSearchPolicyContext): string {
+export function buildCollectionSearchPrompt(now: Date, context?: CollectionSearchPolicyContext, businesses: BusinessDef[] = DEFAULT_BUSINESSES): string {
+  const defs = sortBusinesses(businesses);
   const windowStart = new Date(now.getTime() - COLLECTION_SEARCH_WINDOW_DAYS * DAY_MS);
   return [
-    "あなたは戸建て・集合住宅向けの宅配ボックス／機能門柱と、マルチロッカー事業を手がけるメーカーの商品企画担当を支援するリサーチャーです。",
-    "Web検索を使って、下記の2事業に関する業界ニュースを集め、選び、要約してください。指定されたJSON Schemaに合うJSONだけを最終応答として返し、説明文・前置き・コードフェンスは付けないでください。",
+    "あなたは戸建て・集合住宅向けのエクステリア（宅配ボックス・ポスト・機能門柱）とマルチロッカー事業を手がけ、生成AI（Gemini・Copilot）の業務活用も追うメーカーの商品企画担当を支援するリサーチャーです。",
+    "Web検索を使って、下記の${defs.length}区分に関する業界ニュースを集め、選び、要約してください。指定されたJSON Schemaに合うJSONだけを最終応答として返し、説明文・前置き・コードフェンスは付けないでください。",
     "",
     "## 対象の事業",
     "",
-    `- 宅配事業（DELIVERY）: ${DELIVERY_SCOPE}`,
-    `- ロッカー事業（LOCKER）: ${LOCKER_SCOPE}`,
+    ...defs.map((def) => `- ${def.label}（${def.key}）: ${def.scope}`),
     "",
     ...(context
       ? [
           "## 現在の検索・判定基準（事業ごと）",
           "",
-          ...businessPolicySection("宅配事業（DELIVERY）", context.delivery),
-          ...businessPolicySection("ロッカー事業（LOCKER）", context.locker),
-          "この基準と不採用記事を踏まえて記事を選んでください。収集後は nextPolicyDelivery・nextPolicyLocker に、それぞれの事業で次回以降に使う改善済みの検索・判定基準を簡潔に書いてください。",
+          ...defs.flatMap((def) => context[def.key] ? businessPolicySection(`${def.label}（${def.key}）`, context[def.key]) : []),
+          "この基準と不採用記事を踏まえて記事を選んでください。収集後は nextPolicies に、区分ごと（business）に次回以降に使う改善済みの検索・判定基準（policy）を簡潔に書いてください。",
           "",
         ]
       : []),
@@ -126,14 +126,14 @@ export function buildCollectionSearchPrompt(now: Date, context?: CollectionSearc
     "## 選び方",
     "",
     `- 事業ごとに${COLLECTION_SEARCH_ARTICLE_LIMIT_PER_BUSINESS}件まで、合計${COLLECTION_SEARCH_ARTICLE_LIMIT}件までを目安にします。該当する記事が少ない事業は、無理に埋めず少ない件数のままにしてください。`,
-    "- 宅配とロッカーを別々に検索・選定します。宅配はポスト、宅配ボックス、機能門柱、置き配、防犯、施工、配送員・利用者課題、配送ロボット・ドローン・自動運転配送、スマートロック、受渡し連携を確認します。ロッカーはマルチロッカー、セルフ発送機、PUDO、SMARI、Amazon Hub、マルチエキューブ、SPACER、発送・返品・返却・受取、満杯・空占有・滞留・誤投函・保守・設置・事業性を確認します。",
+    `- 区分（${defs.map((def) => def.label).join("・")}）を別々に検索・選定します。確認する観点は区分ごとに次のとおりです。${defs.map((def) => `${def.label}は${def.scope}`).join("。")}。`,
     "- 各事業で国内検索と英語による海外検索を必ず行い、米国・欧州・アジア／オセアニアの一次情報を確認します。通常ニュースに加え、査読論文・行政調査、特許公報、企業公式・放送局の動画、ログイン不要の公開SNSを毎回確認します。",
     "- 学術は公開日・査読状況・研究地域・主要条件／数値・DOI等の原典を確認します。特許は番号・権利者・優先日・法的状態・示唆を確認し、同じ特許ファミリーは1件へ統合します。FTO・侵害等の法的判断はしません。動画は放送予定と放送後の新情報を統合します。SNSは個人情報・晒し・噂・生成AI捏造を除外し、反応数／複数投稿傾向／現場性／具体的な仕様・運用課題がある公開情報だけを扱います。",
     "- 同じ週の既存記事と比べ、同一発表・導入・実証・制度変更・数値発表・特許ファミリーは増やさず、数値・地域・仕様・利用者反応の差分があれば既存記事の更新として扱います。一次情報を主リンクにし、補足記事とSNS反応は同じ記事に集約します。商品企画・全体設計への示唆を説明できない情報は採用しません。",
     "- 商品企画・全体設計の判断に効くものを優先します。新商品・競合の動き・導入事例・制度や補助金・市場統計・ユーザーの課題・品質や安全・海外事例などです。",
     "- 公式発表・行政・企業のニュースリリースなど一次情報を優先し、その記事の isPrimarySource を true にします。転載・解説記事しか見つからないときは false にし、可能なら元の発表元を publisher・targetCompany に入れてください。",
     "- 同じ発表を報じた複数の記事は1件にまとめ、最も原典に近いものを選びます。",
-    "- 語句が一致するだけで、宅配やロッカーが話題の背景や小道具としてしか出てこない記事（芸能・スポーツ・事件など）は選ばないでください。",
+    "- 語句が一致するだけで、各区分の話題が背景や小道具としてしか出てこない記事（芸能・スポーツ・事件など）は選ばないでください。",
     "",
     "## 各記事に付ける内容",
     "",
@@ -157,12 +157,13 @@ export function buildCollectionSearchPrompt(now: Date, context?: CollectionSearc
  * 項目は`["string","null"]`で表す。キー名を決めないオブジェクト（数値の項目名など）は置かず、
  * `{ name, value }`の配列で受ける（#90。置くとモデルを呼ぶ前に400で落ちる）。
  */
-export function buildCollectionSearchSchema(): Record<string, unknown> {
+export function buildCollectionSearchSchema(businesses: BusinessDef[] = DEFAULT_BUSINESSES): Record<string, unknown> {
+  const keys = businessKeys(businesses);
   const nullableString = { type: ["string", "null"] };
   return {
     type: "object",
     additionalProperties: false,
-    required: ["articles", "nextPolicyDelivery", "nextPolicyLocker", "searchReport"],
+    required: ["articles", "nextPolicies", "searchReport"],
     properties: {
       articles: {
         type: "array",
@@ -192,7 +193,7 @@ export function buildCollectionSearchSchema(): Record<string, unknown> {
             "extractedMetrics",
           ],
           properties: {
-            business: { type: "string", enum: ["DELIVERY", "LOCKER"] },
+            business: { type: "string", enum: keys },
             informationType: { type: "string", enum: [...COLLECTED_INFORMATION_TYPES] },
             title: { type: "string" },
             url: { type: "string" },
@@ -217,8 +218,15 @@ export function buildCollectionSearchSchema(): Record<string, unknown> {
           },
         },
       },
-      nextPolicyDelivery: { type: "string" },
-      nextPolicyLocker: { type: "string" },
+      // 区分名をキーにしたオブジェクトは構造化出力で使えない（analysis-promptのmetricsと同じ）ため、配列で受ける。
+      nextPolicies: {
+        type: "array",
+        items: {
+          type: "object", additionalProperties: false,
+          required: ["business", "policy"],
+          properties: { business: { type: "string", enum: keys }, policy: { type: "string" } },
+        },
+      },
       searchReport: {
         type: "object", additionalProperties: false,
         required: ["checkedRegions", "checkedSources", "checkedThemes"],
@@ -259,7 +267,7 @@ export type CollectedArticle = {
 
 export type CollectionSearchReport = { checkedRegions: string[]; checkedSources: string[]; checkedThemes: string[] };
 export type CollectionSearchParseResult =
-  | { ok: true; articles: CollectedArticle[]; found: number; dropped: number; nextPolicyDelivery: string | null; nextPolicyLocker: string | null; searchReport: CollectionSearchReport }
+  | { ok: true; articles: CollectedArticle[]; found: number; dropped: number; nextPolicies: Record<string, string>; searchReport: CollectionSearchReport }
   | { ok: false; error: string };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -321,9 +329,9 @@ function oneOf<T extends string>(value: unknown, allowed: readonly T[]): T | nul
   return typeof value === "string" && (allowed as readonly string[]).includes(value) ? (value as T) : null;
 }
 
-function toArticle(raw: unknown): CollectedArticle | null {
+function toArticle(raw: unknown, keys: readonly string[]): CollectedArticle | null {
   if (!isRecord(raw)) return null;
-  const business = oneOf(raw.business, ["DELIVERY", "LOCKER"] as const);
+  const business = oneOf(raw.business, keys);
   const title = optionalString(raw.title, TITLE_LIMIT);
   const url = articleUrl(raw.url);
   const sourceName = optionalString(raw.sourceName, SOURCE_NAME_LIMIT);
@@ -362,19 +370,29 @@ function toArticle(raw: unknown): CollectedArticle | null {
  *   区別が付かなくなるため）
  * - 事業ごと・全体の上限を超えた分は、返ってきた順に落とす（上限は週報登録APIと同じ）
  */
-export function parseCollectionSearchPayload(raw: unknown): CollectionSearchParseResult {
+export function parseCollectionSearchPayload(raw: unknown, businesses: BusinessDef[] = DEFAULT_BUSINESSES): CollectionSearchParseResult {
+  const keys = businessKeys(businesses);
   if (!isRecord(raw)) return { ok: false, error: "収集の結果がオブジェクトではありません" };
   if (!Array.isArray(raw.articles)) return { ok: false, error: "articlesが配列ではありません" };
 
   const found = raw.articles.length;
-  const perBusiness: Record<CollectedBusiness, number> = { DELIVERY: 0, LOCKER: 0 };
+  const perBusiness: Record<string, number> = Object.fromEntries(keys.map((key) => [key, 0]));
   const articles: CollectedArticle[] = [];
   for (const item of raw.articles) {
-    const article = toArticle(item);
+    const article = toArticle(item, keys);
     if (!article) continue;
     if (articles.length >= COLLECTION_SEARCH_ARTICLE_LIMIT || perBusiness[article.business] >= COLLECTION_SEARCH_ARTICLE_LIMIT_PER_BUSINESS) continue;
     perBusiness[article.business]++;
     articles.push(article);
+  }
+  const nextPolicies: Record<string, string> = {};
+  if (Array.isArray(raw.nextPolicies)) {
+    for (const item of raw.nextPolicies) {
+      if (!isRecord(item)) continue;
+      const business = oneOf(item.business, keys);
+      const policy = optionalString(item.policy, 4000);
+      if (business && policy) nextPolicies[business] = policy;
+    }
   }
   if (found > 0 && articles.length === 0) return { ok: false, error: "返ってきた記事がどれも読み取れませんでした" };
   return {
@@ -382,8 +400,7 @@ export function parseCollectionSearchPayload(raw: unknown): CollectionSearchPars
     articles,
     found,
     dropped: found - articles.length,
-    nextPolicyDelivery: optionalString(raw.nextPolicyDelivery, 4000),
-    nextPolicyLocker: optionalString(raw.nextPolicyLocker, 4000),
+    nextPolicies,
     searchReport: isRecord(raw.searchReport) ? { checkedRegions: stringList(raw.searchReport.checkedRegions), checkedSources: stringList(raw.searchReport.checkedSources), checkedThemes: stringList(raw.searchReport.checkedThemes) } : { checkedRegions: [], checkedSources: [], checkedThemes: [] },
   };
 }

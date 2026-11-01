@@ -2,10 +2,8 @@
 
 import { useState } from "react";
 
-type Business = "DELIVERY" | "LOCKER";
-
 export type BusinessPolicyProps = {
-  business: Business;
+  business: string;
   label: string;
   policy: string;
   updatedAt: string;

@@ -8,7 +8,7 @@ const article = {
   originalUrl: "https://example.com/news/1",
   sourceName: "日経クロステック",
   publisher: null,
-  business: "DELIVERY" as const,
+  business: "EXTERIOR" as const,
   publishedAt: new Date("2026-08-28T00:00:00Z"),
   collectedAt: new Date("2026-08-30T00:00:00Z"),
   content: "本文",
@@ -16,7 +16,7 @@ const article = {
 };
 
 const valid = {
-  relevance: "DELIVERY",
+  relevance: "EXTERIOR",
   confidence: 0.91,
   reason: "宅配ボックスの解錠方式に関する新製品発表のため",
   noiseReason: null,
@@ -82,7 +82,7 @@ describe("parseAnalysisPayload", () => {
     const result = parseAnalysisPayload(valid);
     assert.equal(result.ok, true);
     if (!result.ok) return;
-    assert.equal(result.value.relevance, "DELIVERY");
+    assert.equal(result.value.relevance, "EXTERIOR");
     assert.equal(result.value.duplicates.length, 1);
     assert.equal(result.value.relatedFindings[0].isPrimarySource, true);
     // name/valueの配列を項目名→値のオブジェクトへ畳み、数値で返ってきた値も文字列へ寄せる。

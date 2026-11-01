@@ -3,6 +3,7 @@ import { listIndustryInformationByIds } from "@/lib/industry-information";
 import { json } from "@/lib/internal-auth";
 import { getSharedToken } from "@/lib/shared-token";
 import { getWeekRange } from "@/lib/jst-week";
+import { getBusinesses } from "@/lib/businesses";
 import { buildNewsMail, parseNewsMailRequest, toNewsMailArticle, type NewsMailBrief } from "@/lib/news-mail";
 import { toNewsMailArticleDto } from "@/lib/news-mail-articles";
 import { getLatestWeeklyBrief } from "@/lib/weekly-brief";
@@ -71,6 +72,7 @@ export async function POST(request: Request) {
     subjectBody: input.subjectBody,
     articles: items.map(toNewsMailArticleDto).map(toNewsMailArticle),
     brief,
+    businesses: await getBusinesses(),
   });
 
   const controller = new AbortController();

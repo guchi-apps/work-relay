@@ -4,7 +4,8 @@
  */
 
 import type { Prisma } from "@prisma/client";
-import type { AnalysisDuplicate, AnalysisImportanceValue, AnalysisRelatedFinding, AnalysisRelevanceValue } from "@/lib/analysis-prompt";
+import { businessLabel, type BusinessDef } from "@/lib/business-defs";
+import type { AnalysisDuplicate, AnalysisImportanceValue, AnalysisRelatedFinding } from "@/lib/analysis-prompt";
 import type { FailureKindValue, JobStatusValue } from "@/lib/article-analysis";
 
 /** カードのチップに出す文言。未解析（ジョブが1度も無い状態）はnullで表す。 */
@@ -25,11 +26,10 @@ export const ANALYSIS_STATUS_CLASS: Record<JobStatusValue, string> = {
   AUTH_REQUIRED: "auth",
 };
 
-export const RELEVANCE_LABELS: Record<AnalysisRelevanceValue, string> = {
-  DELIVERY: "宅配事業",
-  LOCKER: "ロッカー事業",
-  OUT_OF_SCOPE: "対象外",
-};
+/** 判定結果（事業区分のキー／対象外）の表示名。区分名はマスタ（`BusinessDef[]`）から引く。 */
+export function relevanceLabel(businesses: readonly BusinessDef[], relevance: string): string {
+  return relevance === "OUT_OF_SCOPE" ? "対象外" : businessLabel(businesses, relevance);
+}
 
 export const IMPORTANCE_LABELS: Record<AnalysisImportanceValue, string> = { HIGH: "高", MEDIUM: "中", REFERENCE: "参考" };
 
