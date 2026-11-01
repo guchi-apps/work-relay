@@ -39,6 +39,11 @@ function formatBytes(bytes: number): string {
 export default function ImageMailPanel({ sharedId, shareError }: Props) {
   const [title, setTitle] = useState("");
   const [images, setImages] = useState<SelectedImage[]>([]);
+  // 画像のデコード待ちの写真（#348）。iOSの選択画面が閉じてから実際に描画できるまでの間、
+  // 固まったように見えないよう「読み込み中」を出すのに使う。
+  const [pendingIds, setPendingIds] = useState<string[]>([]);
+  // 共有メニューから開いたとき、サーバーの一時領域から写真を受け取っている間。
+  const [receiving, setReceiving] = useState(Boolean(sharedId));
   const [widthMode, setWidthMode] = useState<WidthPreset>(DEFAULT_WIDTH);
   const [building, setBuilding] = useState(false);
   const [buildError, setBuildError] = useState<string | null>(null);
@@ -87,6 +92,7 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
       } catch {
         if (sharedId) setShareNotice({ kind: "error", message: "共有された写真の読み込みに失敗しました。もう一度共有してください。" });
       } finally {
+        setReceiving(false);
         // 再読み込みで同じ番号を問い合わせ直さないよう、アドレスバーからクエリを外す。
         if (sharedId || shareError) window.history.replaceState(null, "", window.location.pathname);
       }
@@ -107,7 +113,17 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
     if (!fileList || fileList.length === 0) return;
     const added = Array.from(fileList).map((file) => ({ id: crypto.randomUUID(), file, previewUrl: URL.createObjectURL(file) }));
     setImages((current) => [...current, ...added]);
+    setPendingIds((current) => [...current, ...added.map((image) => image.id)]);
     resetOutcome();
+    // デコードの成否にかかわらず（失敗しても固まらないよう）、終わった写真から読み込み中を外す。
+    for (const image of added) {
+      const probe = new Image();
+      probe.src = image.previewUrl;
+      probe
+        .decode()
+        .catch(() => undefined)
+        .finally(() => setPendingIds((current) => current.filter((id) => id !== image.id)));
+    }
   }
 
   function removeImage(id: string) {
@@ -186,7 +202,9 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
   const doneCount = partStatuses.filter((status) => status === "done").length;
   const allSent = partCount > 0 && doneCount === partCount;
   const nextPart = partStatuses.findIndex((status) => status !== "done") + 1;
-  const canBuild = !building && images.length > 0 && title.trim().length > 0;
+  const loadingCount = pendingIds.length;
+  const loadingPhotos = loadingCount > 0 || receiving;
+  const canBuild = !building && !loadingPhotos && images.length > 0 && title.trim().length > 0;
   const canSend = !sending && buildResult !== null && !allSent;
 
   const sendLabel = sending
@@ -230,14 +248,24 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
       <div className="imgmail-block">
         <div className="imgmail-block-head"><h2>写真</h2><span>{images.length}枚選択中</span></div>
         <div className="imgmail-add">
-          <button type="button" className="cta" onClick={() => captureInputRef.current?.click()}>📷　写真を撮る</button>
-          <button type="button" className="cta ghost" onClick={() => pickInputRef.current?.click()}>🖼　写真を追加</button>
+          <button type="button" className="cta" disabled={loadingPhotos} onClick={() => captureInputRef.current?.click()}>📷　写真を撮る</button>
+          <button type="button" className="cta ghost" disabled={loadingPhotos} onClick={() => pickInputRef.current?.click()}>
+            {loadingPhotos ? <><i className="spin" aria-hidden="true" />読み込み中…</> : "🖼　写真を追加"}
+          </button>
         </div>
+        {loadingPhotos && (
+          <div className="imgmail-loading" role="status" aria-live="polite">
+            <i className="spin" aria-hidden="true" />
+            {loadingCount > 0 ? `${loadingCount}枚の写真を読み込んでいます…` : "共有された写真を受け取っています…"}
+          </div>
+        )}
         <input ref={captureInputRef} type="file" accept="image/*" capture="environment" hidden onChange={(event) => { addFiles(event.target.files); event.target.value = ""; }} />
         <input ref={pickInputRef} type="file" accept="image/*" multiple hidden onChange={(event) => { addFiles(event.target.files); event.target.value = ""; }} />
         {images.length > 0 && (
           <div className="imgmail-thumbs">
-            {images.map((image) => (
+            {images.map((image) => pendingIds.includes(image.id) ? (
+              <div key={image.id} className="thumb loading" aria-hidden="true" />
+            ) : (
               <div key={image.id} className="thumb" style={{ backgroundImage: `url(${image.previewUrl})`, backgroundSize: "cover", backgroundPosition: "center" }}>
                 <button type="button" aria-label={`${image.file.name}を削除`} onClick={() => removeImage(image.id)}>×</button>
               </div>
