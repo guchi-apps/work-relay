@@ -97,6 +97,8 @@ final class ShareImporter: ObservableObject {
         func field(_ name: String, _ value: String) {
             body.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n".utf8))
         }
+        // 応答だけ受け取れずに再試行しても、サーバーが同じ共有として扱う冪等キー（写真が重複して残らない）
+        field("shareKey", share.id)
         if !share.title.isEmpty { field("title", share.title) }
         if !share.text.isEmpty { field("text", share.text) }
         if let url = share.url { field("url", url) }
