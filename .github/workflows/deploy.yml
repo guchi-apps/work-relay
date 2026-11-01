@@ -129,7 +129,6 @@ jobs:
       AIDE_TEXT_MAIL_TOKEN: ${{ secrets.AIDE_TEXT_MAIL_TOKEN }}
       SHARED_TOKEN_API_SECRET: ${{ secrets.SHARED_TOKEN_API_SECRET }}
       ISSUE_DECK_URL: ${{ vars.APP_BASE_URL }}
-      TARGET_DIR: ${{ secrets.TARGET_DIR }}
       SIGNALY_WEBHOOK_URL: ${{ secrets.SIGNALY_WEBHOOK_URL }}
 
     steps:
@@ -227,7 +226,6 @@ jobs:
       AIDE_TEXT_MAIL_TOKEN: ${{ secrets.AIDE_TEXT_MAIL_TOKEN }}
       SHARED_TOKEN_API_SECRET: ${{ secrets.SHARED_TOKEN_API_SECRET }}
       ISSUE_DECK_URL: ${{ vars.APP_BASE_URL }}
-      TARGET_DIR: ${{ secrets.TARGET_DIR }}
       SIGNALY_WEBHOOK_URL: ${{ secrets.SIGNALY_WEBHOOK_URL }}
 
     steps:
