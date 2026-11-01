@@ -25,7 +25,7 @@
 #   op signin                      # 先に個人アカウントでサインインしておく
 #   scripts/sync-github-secrets.sh --dry-run
 #   scripts/sync-github-secrets.sh
-#   scripts/sync-github-secrets.sh --only SIGNALY_WEBHOOK_URL,HOST
+#   scripts/sync-github-secrets.sh --only HOST
 #
 #   # organizationの共通値（#1307）。admin:org スコープが要る
 #   scripts/sync-github-secrets.sh --manifest .github/org-secrets-manifest.tsv --dry-run
