@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import HeaderUserMenu from "@/components/HeaderUserMenu";
 import SharePanel, { type ExistingArticleView } from "@/components/SharePanel";
 import { getCurrentUser } from "@/lib/auth";
+import { getBusinesses } from "@/lib/businesses";
 import { buildNewsMailPickPath, fallbackArticleTitle, normalizeSharedText } from "@/lib/share-inbox";
 import { findArticleByUrl } from "@/lib/shared-article";
 
@@ -56,7 +57,7 @@ export default async function SharePage({ searchParams }: { searchParams: Promis
           <HeaderUserMenu />
         </div>
       </header>
-      <SharePanel url={shared.url} text={shared.text} defaultTitle={fallbackArticleTitle(shared)} existing={existing} />
+      <SharePanel businesses={await getBusinesses()} url={shared.url} text={shared.text} defaultTitle={fallbackArticleTitle(shared)} existing={existing} />
     </section>
   );
 }

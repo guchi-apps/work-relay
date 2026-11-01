@@ -18,6 +18,7 @@
 // つきで書く。`@/`のエイリアスはtsconfigのpathsで、Nodeの実行時解決には効かない。
 import { formatIsoDate, formatWeekLabel, isWithinWeek, OLDEST_WEEK_OFFSET } from "./jst-week.ts";
 import type { WeekRange } from "./jst-week.ts";
+import { DEFAULT_BUSINESSES, businessLabel, businessShortLabel, sortBusinesses, type BusinessDef } from "./business-defs.ts";
 import type { WeeklyBriefTopic } from "./weekly-brief-prompt.ts";
 
 /** 件名の固定接頭辞。画面からは変更できない（画像メールの`[画像]`と同じ扱い）。 */
@@ -29,7 +30,8 @@ export const MAX_SUBJECT_BODY_LENGTH = 160;
 /** 1通に載せられる記事数の上限。1週ぶんの保持上限（事業ごと15件＝30件）に余裕を足した値。 */
 export const MAX_MAIL_ARTICLES = 60;
 
-export type MailBusiness = "DELIVERY" | "LOCKER";
+/** 事業区分のキー（エクステリア・ロッカー・AI関連など。マスタが正）。 */
+export type MailBusiness = string;
 export type MailImportance = "HIGH" | "MEDIUM" | "REFERENCE";
 
 export type NewsMailMetric = { name: string; value: string };
@@ -61,13 +63,13 @@ export type NewsMailInput = {
   subjectBody: string;
   articles: NewsMailArticle[];
   brief: NewsMailBrief | null;
+  /** 事業区分のマスタ。省略時は初期値。 */
+  businesses?: BusinessDef[];
 };
 
 export type NewsMailContent = { subject: string; html: string; text: string };
 
-const BUSINESS_LABELS: Record<MailBusiness, string> = { DELIVERY: "宅配事業", LOCKER: "ロッカー事業" };
 const IMPORTANCE_LABELS: Record<MailImportance, string> = { HIGH: "高", MEDIUM: "中", REFERENCE: "参考" };
-const BUSINESS_ORDER: MailBusiness[] = ["DELIVERY", "LOCKER"];
 const IMPORTANCE_ORDER: MailImportance[] = ["HIGH", "MEDIUM", "REFERENCE"];
 
 const COLORS = {
@@ -75,6 +77,7 @@ const COLORS = {
   teal: "#087f78",
   tealPale: "#e2f3ef",
   orange: "#d97735",
+  violet: "#7a5bc7",
   ink: "#182529",
   body: "#33474a",
   muted: "#6c7b7c",
@@ -133,10 +136,10 @@ export type NewsMailCounts = {
 };
 
 /** メール冒頭の内訳（図の元になる数）。画面の帯とメールで同じ数字を出すためここで数える。 */
-export function countNewsMailArticles(articles: NewsMailArticle[], range: WeekRange): NewsMailCounts {
+export function countNewsMailArticles(articles: NewsMailArticle[], range: WeekRange, businesses: BusinessDef[] = DEFAULT_BUSINESSES): NewsMailCounts {
   return {
     total: articles.length,
-    byBusiness: BUSINESS_ORDER.map((business) => ({ business, count: articles.filter((article) => article.business === business).length })),
+    byBusiness: sortBusinesses(businesses).map((def) => def.key).map((business) => ({ business, count: articles.filter((article) => article.business === business).length })),
     byImportance: IMPORTANCE_ORDER.map((importance) => ({ importance, count: articles.filter((article) => article.importance === importance).length })),
     primarySource: articles.filter((article) => article.isPrimarySource).length,
     collectedOnly: articles.filter((article) => isCollectedOnly(article, range)).length,
@@ -210,7 +213,7 @@ ${topics}
 </div>`;
 }
 
-function countsBlock(counts: NewsMailCounts): string {
+function countsBlock(counts: NewsMailCounts, businesses: BusinessDef[]): string {
   const max = Math.max(...counts.byBusiness.map((row) => row.count), 1);
   const pills = [
     ...counts.byImportance.map((row) => ({ text: `重要度 ${IMPORTANCE_LABELS[row.importance]}　${row.count}件`, strong: row.importance === "HIGH" && row.count > 0 })),
@@ -219,8 +222,7 @@ function countsBlock(counts: NewsMailCounts): string {
   return `<div style="margin-bottom:18px;">
 ${sectionHeading("内訳", null)}
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">
-${barRow(BUSINESS_LABELS.DELIVERY, counts.byBusiness[0].count, max, COLORS.teal)}
-${barRow(BUSINESS_LABELS.LOCKER, counts.byBusiness[1].count, max, COLORS.orange)}
+${counts.byBusiness.map((row) => barRow(businessLabel(businesses, row.business), row.count, max, COLORS[businesses.find((def) => def.key === row.business)?.color ?? "teal"])).join("\n")}
 </table>
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin-top:9px;"><tr>${pills.map((item) => pill(item.text, item.strong)).join("")}</tr></table>
 </div>`;
@@ -245,19 +247,20 @@ ${url ? `<p style="margin:7px 0 0;font-size:11px;"><a href="${escapeHtml(url)}" 
 
 /** 図解つきのHTML本文。画面のプレビューにもこの文字列をそのまま差し込む。 */
 export function buildNewsMailHtml(input: NewsMailInput): string {
-  const counts = countNewsMailArticles(input.articles, input.range);
-  const sections = BUSINESS_ORDER.flatMap((business) => {
+  const businesses = input.businesses ?? DEFAULT_BUSINESSES;
+  const counts = countNewsMailArticles(input.articles, input.range, businesses);
+  const sections = counts.byBusiness.map((row) => row.business).flatMap((business) => {
     const items = input.articles.filter((article) => article.business === business);
     if (items.length === 0) return [];
     return [
       `<div style="margin-bottom:18px;">
-${sectionHeading(`${BUSINESS_LABELS[business]}（${items.length}件）`, null)}
+${sectionHeading(`${businessLabel(businesses, business)}（${items.length}件）`, null)}
 ${items.map((article) => articleBlock(article, input.range)).join("\n")}
 </div>`,
     ];
   }).join("\n");
 
-  const heroNote = [`宅配 ${counts.byBusiness[0].count}件`, `ロッカー ${counts.byBusiness[1].count}件`].join(" ／ ")
+  const heroNote = counts.byBusiness.map((row) => `${businessShortLabel(businesses, row.business)} ${row.count}件`).join(" ／ ")
     + (counts.collectedOnly > 0 ? `　·　うちこの週に取得して拾った記事 ${counts.collectedOnly}件` : "");
 
   return `<div style="margin:0;padding:16px;background:${COLORS.ground};font-family:${FONT};">
@@ -269,7 +272,7 @@ ${items.map((article) => articleBlock(article, input.range)).join("\n")}
 </td></tr>
 <tr><td style="padding:18px 20px;">
 ${input.brief ? briefBlock(input.brief) : `<p style="margin:0 0 18px;padding:10px 12px;background:${COLORS.paper};border:1px dashed ${COLORS.line};border-radius:8px;font-size:11.5px;color:${COLORS.muted};">この週の総括はまだ作成していません。記事の一覧のみをお送りします。</p>`}
-${counts.total > 0 ? countsBlock(counts) : ""}
+${counts.total > 0 ? countsBlock(counts, businesses) : ""}
 ${sections || `<p style="margin:0;font-size:12px;color:${COLORS.muted};">送る記事が選ばれていません。</p>`}
 ${counts.unanalyzed > 0 ? `<p style="margin:16px 0 0;font-size:11px;color:${COLORS.muted};">※ ${counts.unanalyzed}件はAI解析が終わっていないため、登録時の要約を載せています。</p>` : ""}
 </td></tr>
@@ -282,8 +285,9 @@ ${counts.unanalyzed > 0 ? `<p style="margin:16px 0 0;font-size:11px;color:${COLO
 // プレーンテキストでも作って一緒に送る。
 
 export function buildNewsMailText(input: NewsMailInput): string {
-  const counts = countNewsMailArticles(input.articles, input.range);
-  const lines: string[] = [`業界ニュース週報　${formatWeekLabel(input.range)}`, `宅配 ${counts.byBusiness[0].count}件 ／ ロッカー ${counts.byBusiness[1].count}件`];
+  const businesses = input.businesses ?? DEFAULT_BUSINESSES;
+  const counts = countNewsMailArticles(input.articles, input.range, businesses);
+  const lines: string[] = [`業界ニュース週報　${formatWeekLabel(input.range)}`, counts.byBusiness.map((row) => `${businessShortLabel(businesses, row.business)} ${row.count}件`).join(" ／ ")];
   if (counts.collectedOnly > 0) lines.push(`うちこの週に取得して拾った記事 ${counts.collectedOnly}件`);
   lines.push("");
 
@@ -297,14 +301,14 @@ export function buildNewsMailText(input: NewsMailInput): string {
   }
 
   lines.push("■ 内訳");
-  for (const row of counts.byBusiness) lines.push(`- ${BUSINESS_LABELS[row.business]}: ${row.count}件`);
+  for (const row of counts.byBusiness) lines.push(`- ${businessLabel(businesses, row.business)}: ${row.count}件`);
   lines.push(`- 重要度: ${counts.byImportance.map((row) => `${IMPORTANCE_LABELS[row.importance]} ${row.count}件`).join(" / ")}`);
   lines.push(`- 一次情報: ${counts.primarySource}件`, "");
 
-  for (const business of BUSINESS_ORDER) {
+  for (const business of counts.byBusiness.map((row) => row.business)) {
     const items = input.articles.filter((article) => article.business === business);
     if (items.length === 0) continue;
-    lines.push(`■ ${BUSINESS_LABELS[business]}（${items.length}件）`, "");
+    lines.push(`■ ${businessLabel(businesses, business)}（${items.length}件）`, "");
     for (const article of items) {
       lines.push(`・${article.title}`, `  ${dateLine(article, input.range)}`, `  ${article.summary ?? "要約は登録されていません。"}`);
       if (article.implications) lines.push(`  企画への示唆: ${article.implications}`);

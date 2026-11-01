@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { canAcceptReport, classifyFailure, isDuplicateJobError, LEASE_SECONDS, truncateFailureMessage, type FailureSignal, type JobStatusValue } from "@/lib/analysis-job-rules";
 import { formatWeekLabel, getWeekRange, type WeekRange } from "@/lib/jst-week";
+import { getBusinesses } from "@/lib/businesses";
 import { buildWeeklyBriefPrompt, buildWeeklyBriefSchema, parseWeeklyBriefPayload, toWeeklyBriefTopics, type WeeklyBriefArticle, type WeeklyBriefTopic } from "@/lib/weekly-brief-prompt";
 import type { WeekBasisParam } from "@/lib/industry-information";
 
@@ -179,7 +180,7 @@ export async function claimWeeklyBriefJobs(host: string, take: number, now = new
     claimed.push({
       jobId: candidate.id,
       label: `${formatWeekLabel(range)} の週報総括`,
-      prompt: buildWeeklyBriefPrompt(range, await loadBriefArticles(toArticleIds(job.articleIds))),
+      prompt: buildWeeklyBriefPrompt(range, await loadBriefArticles(toArticleIds(job.articleIds)), await getBusinesses()),
       outputSchema: buildWeeklyBriefSchema(),
       leaseExpiresAt: leaseExpiresAt.toISOString(),
     });

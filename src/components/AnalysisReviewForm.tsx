@@ -2,10 +2,12 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import type { BusinessDef } from "@/lib/business-defs";
 import type { AnalysisImportanceValue, AnalysisRelevanceValue } from "@/lib/analysis-prompt";
 
 type Props = {
   articleId: string;
+  businesses: BusinessDef[];
   /** 現在の実効値（人が確定済みならその値、まだなら登録時の値）。 */
   relevance: AnalysisRelevanceValue;
   importance: AnalysisImportanceValue;
@@ -19,7 +21,7 @@ type Props = {
  * AIの判定は`ArticleAnalysis`にそのまま残り、ここで確定した内容が表示と週報候補に効く。
  * 誤判定（無関係な記事が高重要度で並ぶ等）はここで直す。
  */
-export default function AnalysisReviewForm({ articleId, relevance, importance, weeklyCandidate, note }: Props) {
+export default function AnalysisReviewForm({ articleId, businesses, relevance, importance, weeklyCandidate, note }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
@@ -48,8 +50,11 @@ export default function AnalysisReviewForm({ articleId, relevance, importance, w
       <label className="field">
         <span>事業区分</span>
         <select value={form.relevance} onChange={(event) => setForm({ ...form, relevance: event.target.value as AnalysisRelevanceValue })}>
-          <option value="DELIVERY">宅配事業</option>
-          <option value="LOCKER">ロッカー事業</option>
+          {businesses.map((def) => (
+            <option key={def.key} value={def.key}>
+              {def.label}
+            </option>
+          ))}
           <option value="OUT_OF_SCOPE">対象外</option>
         </select>
       </label>

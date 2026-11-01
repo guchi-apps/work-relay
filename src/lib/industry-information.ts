@@ -1,3 +1,4 @@
+import { businessFromParam } from "@/lib/business-defs";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getWeekRange, type WeekRange } from "@/lib/jst-week";
@@ -9,7 +10,8 @@ import type { TriageParam } from "@/lib/triage";
 export { buildWeekCalendarMonths, DAY_MS, formatDate, formatDateTime, formatIsoDate, formatWeekLabel, getIsoWeekNumber, getRecencyLabel, getWeekRange, isWithinWeek, jstParts, OLDEST_WEEK_OFFSET, parseWeekOffset } from "@/lib/jst-week";
 export type { CalendarDay, CalendarMonth, CalendarWeekRow, RecencyLabel, WeekRange } from "@/lib/jst-week";
 
-export type BusinessParam = "all" | "delivery" | "locker";
+/** `all`か事業区分の小文字キー（`exterior`など）。 */
+export type BusinessParam = string;
 export type SourceParam = "all" | "primary" | "related";
 export type ImportanceParam = "all" | "high" | "medium" | "reference";
 /** AI解析の絞り込み（#79）。`pending`は未解析・待ち・実行中、`attention`は失敗・認証待ち。 */
@@ -35,7 +37,6 @@ export type IndustryInformationFilters = {
   hideExcluded: boolean;
 };
 
-const BUSINESS_BY_PARAM = { delivery: "DELIVERY", locker: "LOCKER" } as const;
 const IMPORTANCE_BY_PARAM = { high: "HIGH", medium: "MEDIUM", reference: "REFERENCE" } as const;
 // キーワードは文字列列だけ部分一致で引く。`keywords`・`tags`はJSON列で、Prismaが出せるのは
 // 要素の完全一致（array_contains = JSON_CONTAINS）までのため、部分一致は文字列列に任せる。
@@ -128,7 +129,7 @@ function analysisCondition(analysis: AnalysisParam): Prisma.IndustryInformationW
 /** 業界ニュース画面が表示する1週ぶんの業界情報を、絞り込み条件つきで取得する。 */
 export async function listIndustryInformation(filters: IndustryInformationFilters, now = new Date()): Promise<IndustryInformationListItem[]> {
   const conditions: Prisma.IndustryInformationWhereInput[] = [weekCondition(getWeekRange(filters.weekOffset, now))];
-  if (filters.business !== "all") conditions.push({ business: BUSINESS_BY_PARAM[filters.business] });
+  if (filters.business !== "all") conditions.push({ business: businessFromParam(filters.business) });
   if (filters.source !== "all") conditions.push({ isPrimarySource: filters.source === "primary" });
   if (filters.importance !== "all") conditions.push({ importance: IMPORTANCE_BY_PARAM[filters.importance] });
   if (filters.keyword) conditions.push(keywordCondition(filters.keyword));
@@ -257,7 +258,7 @@ export async function listNewsMailArticles(filters: NewsMailFilters, now = new D
     weekConditionByBasis(getWeekRange(filters.weekOffset, now), filters.basis),
     mailTriageCondition(filters.triage),
   ];
-  if (filters.business !== "all") conditions.push({ business: BUSINESS_BY_PARAM[filters.business] });
+  if (filters.business !== "all") conditions.push({ business: businessFromParam(filters.business) });
   if (filters.importance !== "all") conditions.push({ importance: IMPORTANCE_BY_PARAM[filters.importance] });
   if (filters.keyword) conditions.push(keywordCondition(filters.keyword));
 

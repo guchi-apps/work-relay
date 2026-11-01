@@ -2,10 +2,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import AnalysisStatusStrip from "@/components/AnalysisStatusStrip";
 import AutoRefresh from "@/components/AutoRefresh";
-import { ANALYSIS_STATUS_CLASS, ANALYSIS_STATUS_LABELS, FAILURE_KIND_LABELS, formatElapsed, isWorkerStale, RELEVANCE_LABELS, WORKER_STALE_MINUTES } from "@/lib/analysis-display";
+import { ANALYSIS_STATUS_CLASS, ANALYSIS_STATUS_LABELS, FAILURE_KIND_LABELS, formatElapsed, isWorkerStale, relevanceLabel, WORKER_STALE_MINUTES } from "@/lib/analysis-display";
 import { ATTENTION_LIMIT, AUTO_REFRESH_SECONDS, formatClock, formatDuration, formatLeaseRemaining, formatSnapshotTime, leaseProgress, orderQueue, RECENT_COMPLETED_LIMIT, startOfJstDay } from "@/lib/analysis-queue-view";
 import { getAnalysisOverview, getAnalysisQueueDetail, MAX_CLAIM_JOBS, type QueueItem } from "@/lib/article-analysis";
 import { getCurrentUser } from "@/lib/auth";
+import { getBusinesses, normalizeBusinessKey, type BusinessDef } from "@/lib/businesses";
 import { listRecentCollectionSearchJobs } from "@/lib/collection-search";
 import { formatDateTime } from "@/lib/jst-week";
 
@@ -19,10 +20,10 @@ function ItemTitle({ item }: { item: QueueItem }) {
   return item.article ? <Link className="q-title" href={`/dashboard/articles/${item.article.id}`}>{item.label}</Link> : <span className="q-title">{item.label}</span>;
 }
 
-function ItemMeta({ item, children }: { item: QueueItem; children?: React.ReactNode }) {
+function ItemMeta({ item, businesses, children }: { item: QueueItem; businesses: BusinessDef[]; children?: React.ReactNode }) {
   return (
     <div className="q-meta">
-      {item.article ? <><span>記事</span><span>{RELEVANCE_LABELS[item.article.business]}</span></> : <><span className="chip kind">週の総括</span><span>対象 {item.articleCount}件</span></>}
+      {item.article ? <><span>記事</span><span>{relevanceLabel(businesses, item.article.business)}</span></> : <><span className="chip kind">週の総括</span><span>対象 {item.articleCount}件</span></>}
       {children}
       {item.attempt !== null && item.attempt > 1 && <span>試行 {item.attempt}回目</span>}
     </div>
@@ -41,6 +42,7 @@ export default async function AnalysisStatusPage() {
   if (user.status === "unauthenticated") redirect("/login");
 
   const now = new Date();
+  const businesses = await getBusinesses();
   const [overview, detail, collectionJobs] = await Promise.all([getAnalysisOverview(), getAnalysisQueueDetail({ recentLimit: RECENT_COMPLETED_LIMIT, attentionLimit: ATTENTION_LIMIT, todayStart: startOfJstDay(now) }), listRecentCollectionSearchJobs(COLLECTION_JOB_LIMIT)]);
   const queued = orderQueue(detail.queued);
   const worker = overview.worker;
@@ -62,7 +64,7 @@ export default async function AnalysisStatusPage() {
           {detail.running.length === 0 ? <p className="q-empty">いま解析している記事はありません。</p> : <ol className="q-rows">
             {detail.running.map((item) => <li className="q-row" key={item.id}>
               <span className="chip running q-mark" aria-label="解析中"><i className="dot" /></span>
-              <div><ItemTitle item={item} /><ItemMeta item={item}>{item.startedAt && <span>開始 {formatClock(item.startedAt)}</span>}</ItemMeta></div>
+              <div><ItemTitle item={item} /><ItemMeta item={item} businesses={businesses}>{item.startedAt && <span>開始 {formatClock(item.startedAt)}</span>}</ItemMeta></div>
               <div className="q-side"><b>{item.startedAt ? formatDuration(now.getTime() - item.startedAt.getTime()) : "—"}</b><span>{formatLeaseRemaining(item.leaseExpiresAt, now)}</span></div>
               <div className="q-bar"><b style={{ width: `${Math.round(leaseProgress(item.startedAt, item.leaseExpiresAt, now) * 100)}%` }} /></div>
             </li>)}
@@ -74,7 +76,7 @@ export default async function AnalysisStatusPage() {
           {queued.length === 0 ? <p className="q-empty">順番を待っている記事はありません。</p> : <ol className="q-rows">
             {queued.map((item, index) => <li className="q-row" key={item.id}>
               <span className={`q-pos ${index === 0 ? "next" : ""}`}>{index + 1}</span>
-              <div><ItemTitle item={item} /><ItemMeta item={item}><span>積んだ時刻 {formatClock(item.queuedAt)}</span></ItemMeta></div>
+              <div><ItemTitle item={item} /><ItemMeta item={item} businesses={businesses}><span>積んだ時刻 {formatClock(item.queuedAt)}</span></ItemMeta></div>
               <div className="q-side">
                 {index === 0 && <span className="chip queued">次に解析</span>}
                 <span>{item.kind === "weekly_brief" && queued.some((other) => other.kind === "article") ? "記事のあとに実行" : `待ち ${formatDuration(now.getTime() - item.queuedAt.getTime())}`}</span>
@@ -91,7 +93,7 @@ export default async function AnalysisStatusPage() {
               <span className={`chip ${ANALYSIS_STATUS_CLASS[item.status]} q-mark`} aria-hidden="true"><i className="dot" /></span>
               <div>
                 <Link className="q-title" href={`/dashboard/articles/${item.article.id}`}>{item.article.title}</Link>
-                <div className="q-meta"><span>記事</span><span>{RELEVANCE_LABELS[item.article.business]}</span>{item.finishedAt && <span>終了 {formatClock(item.finishedAt)}</span>}{item.attempt > 1 && <span>試行 {item.attempt}回目</span>}</div>
+                <div className="q-meta"><span>記事</span><span>{relevanceLabel(businesses, item.article.business)}</span>{item.finishedAt && <span>終了 {formatClock(item.finishedAt)}</span>}{item.attempt > 1 && <span>試行 {item.attempt}回目</span>}</div>
               </div>
               <div className="q-side"><span className={`chip ${ANALYSIS_STATUS_CLASS[item.status]}`}>{ANALYSIS_STATUS_LABELS[item.status]}</span></div>
               <p className="q-fail">{item.failureKind ? FAILURE_KIND_LABELS[item.failureKind] : (item.failureMessage ?? "理由は記録されていません")} — {item.status === "AUTH_REQUIRED" ? "VPSでChatGPTに再ログインしてから、記事を開いて「再解析」を押してください" : "記事を開いて「再解析」を押すと積み直せます"}</p>
@@ -106,7 +108,7 @@ export default async function AnalysisStatusPage() {
               <span className="chip done q-mark" aria-hidden="true"><i className="dot" /></span>
               <div>
                 <Link className="q-title" href={`/dashboard/articles/${item.article.id}`}>{item.article.title}</Link>
-                <div className="q-meta"><span>記事</span><span>{item.relevance === "OUT_OF_SCOPE" ? "対象外と判定" : RELEVANCE_LABELS[item.relevance ?? item.article.business]}</span>{item.finishedAt && <span>終了 {formatClock(item.finishedAt)}</span>}</div>
+                <div className="q-meta"><span>記事</span><span>{item.relevance === "OUT_OF_SCOPE" ? "対象外と判定" : relevanceLabel(businesses, item.relevance ?? item.article.business)}</span>{item.finishedAt && <span>終了 {formatClock(item.finishedAt)}</span>}</div>
               </div>
               <div className="q-side"><span className="chip done">完了</span>{item.durationMs !== null && <span>所要 {formatDuration(item.durationMs)}</span>}</div>
             </li>)}
@@ -147,7 +149,7 @@ export default async function AnalysisStatusPage() {
             {job.searchReport && <div className="q-hint">
               <p>確認地域: {job.searchReport.checkedRegions.join("・") || "記録なし"} ／ 情報源: {job.searchReport.checkedSources.join("・") || "記録なし"}</p>
               <p>検索テーマ: {job.searchReport.checkedThemes.join("・") || "記録なし"}</p>
-              <p>宅配 {job.searchReport.businessCounts.find((item) => item.business === "DELIVERY")?.count ?? 0}件・ロッカー {job.searchReport.businessCounts.find((item) => item.business === "LOCKER")?.count ?? 0}件・海外 {job.searchReport.overseasCount}件・SNS {job.searchReport.snsCount}件</p>
+              <p>{businesses.map((def) => `${def.shortLabel} ${job.searchReport!.businessCounts.filter((item) => normalizeBusinessKey(businesses, item.business) === def.key).reduce((sum, item) => sum + item.count, 0)}件`).join("・")}・海外 {job.searchReport.overseasCount}件・SNS {job.searchReport.snsCount}件</p>
               <p>種別: {job.searchReport.informationTypeCounts.map((item) => `${item.informationType} ${item.count}件`).join("・") || "なし"}</p>
             </div>}
             {(job.status === "FAILED" || job.status === "AUTH_REQUIRED") && <p className="q-fail">{job.failureKind ? FAILURE_KIND_LABELS[job.failureKind] : (job.failureMessage ?? "理由は記録されていません")}{job.status === "AUTH_REQUIRED" && " — VPSでChatGPTに再ログインしてください"}</p>}

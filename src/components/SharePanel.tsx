@@ -1,5 +1,6 @@
 "use client";
 
+import type { BusinessDef } from "@/lib/business-defs";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
@@ -18,6 +19,8 @@ export type ExistingArticleView = {
 };
 
 type Props = {
+  /** 事業区分のマスタ。 */
+  businesses: BusinessDef[];
   url: string | null;
   text: string;
   defaultTitle: string;
@@ -25,7 +28,7 @@ type Props = {
   existing: ExistingArticleView | null;
 };
 
-type Business = "DELIVERY" | "LOCKER";
+type Business = string;
 type Saved = { outcome: "created" | "duplicate"; article: ExistingArticleView };
 
 const ANALYSIS_LABELS: Record<string, string> = { QUEUED: "解析待ち", RUNNING: "解析中", COMPLETED: "解析済み", FAILED: "解析失敗", AUTH_REQUIRED: "解析停止中" };
@@ -51,7 +54,7 @@ function ArticleStatusChip({ article }: { article: ExistingArticleView }) {
  * 共有された記事・文章の操作（#144・#149）。URLがあれば新着記事への登録、無ければ
  * 文章をそのまま社用メールへ送る（`TextMailBlock`）。どちらも無ければ案内だけ出す。
  */
-export default function SharePanel({ url, text, defaultTitle, existing }: Props) {
+export default function SharePanel({ businesses, url, text, defaultTitle, existing }: Props) {
   const router = useRouter();
   const [title, setTitle] = useState(defaultTitle);
   const [business, setBusiness] = useState<Business | null>(null);
@@ -174,8 +177,9 @@ export default function SharePanel({ url, text, defaultTitle, existing }: Props)
       <div className="imgmail-block">
         <div className="imgmail-block-head"><h2>事業</h2><span>AI解析で見直されることがあります</span></div>
         <div className="segmented" role="radiogroup" aria-label="事業">
-          <button type="button" role="radio" aria-checked={business === "DELIVERY"} className={business === "DELIVERY" ? "active" : ""} onClick={() => setBusiness("DELIVERY")}>宅配</button>
-          <button type="button" role="radio" aria-checked={business === "LOCKER"} className={business === "LOCKER" ? "active" : ""} onClick={() => setBusiness("LOCKER")}>ロッカー</button>
+          {businesses.map((def) => (
+            <button key={def.key} type="button" role="radio" aria-checked={business === def.key} className={business === def.key ? "active" : ""} onClick={() => setBusiness(def.key)}>{def.shortLabel}</button>
+          ))}
         </div>
       </div>
       {error && <p className="helper" style={{ color: "#b8541c" }}>{error}</p>}

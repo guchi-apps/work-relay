@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
 import { applyHumanReview, setWeeklyCandidate } from "@/lib/article-analysis";
 import { getCurrentUser } from "@/lib/auth";
+import { getBusinesses, normalizeBusinessKey } from "@/lib/businesses";
 
 export const runtime = "nodejs";
 
-const RELEVANCE_VALUES = ["DELIVERY", "LOCKER", "OUT_OF_SCOPE"] as const;
 const IMPORTANCE_VALUES = ["HIGH", "MEDIUM", "REFERENCE"] as const;
 const NOTE_LIMIT = 500;
 
-type Relevance = (typeof RELEVANCE_VALUES)[number];
 type Importance = (typeof IMPORTANCE_VALUES)[number];
 
 /**
@@ -42,7 +41,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
   }
 
-  const relevance = RELEVANCE_VALUES.includes(input.relevance as Relevance) ? (input.relevance as Relevance) : null;
+  const relevance = input.relevance === "OUT_OF_SCOPE" ? "OUT_OF_SCOPE" : normalizeBusinessKey(await getBusinesses(), input.relevance);
   const importance = IMPORTANCE_VALUES.includes(input.importance as Importance) ? (input.importance as Importance) : null;
   if (!relevance || !importance) return NextResponse.json({ error: "invalid_input" }, { status: 400 });
 

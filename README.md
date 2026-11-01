@@ -43,7 +43,7 @@ curl -X POST https://research-desk.gucchii.com/api/collection/daily \
 `scripts/provision-secret.sh --repo guchi-apps/work-relay --key COLLECTION_CRON_SECRET --generate hex32`
 （issue-deck側のスクリプト）で行う。
 
-今週（JST月曜0時始まり）の候補を優先して宅配・ロッカー各5件まで、全体10件まで保持する。候補が
+今週（JST月曜0時始まり）の候補を優先してエクステリア・ロッカー・AI関連の各5件まで、全体15件まで保持する。候補が
 少ない場合は30日以内から補足する。URLが異なっていても発表主体・対象製品・発表日等から同一発表と
 判定した場合は新規作成せず既存記事を更新し、統合元URL・更新理由を記録する（#43）。同じURLの
 再実行は従来どおり登録しない。上限を超えた場合の置換/除外履歴は収集ラン（`CollectionRun`）に
@@ -72,7 +72,7 @@ ChatGPT定期タスク → AIDEのMCPツール → Research Deskの内部API →
 シークレットはResearch DeskとAIDEのサーバー環境変数（AIDE側は `AIDE_RESEARCH_DESK_TOKEN`）
 だけで管理し、ChatGPTへは渡さない。片方だけ値を変えると連携が止まる。
 
-記事は `DELIVERY`（宅配事業）または `LOCKER`（ロッカー事業）に分け、1回あたり全体6件・各事業
+記事は `EXTERIOR`（エクステリア事業＝宅配・ポスト）・`LOCKER`（ロッカー事業）・`AI`（AI関連＝Gemini・Copilot）のいずれか（区分は`industry_business`テーブルが正。旧`DELIVERY`は`EXTERIOR`として受け付ける）に分け、1回あたり全体6件・各事業
 3件まで。同じURLは `normalizedUrl` の一意制約で重複として扱う。URLが異なっていても同一発表と
 判定した記事は新規作成せず既存記事を更新するため（#43）、定期タスクから安全に再実行できる。
 週あたりの保持上限（事業ごと5件）を超えた場合は、優先度の低い既存記事を置換または新規候補を
@@ -83,5 +83,5 @@ ChatGPT定期タスク → AIDEのMCPツール → Research Deskの内部API →
 curl -X POST http://127.0.0.1:3115/api/internal/weekly-report \
   -H "Authorization: Bearer $INTERNAL_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"executedAt":"2026-08-30T18:00:00+09:00","targetFrom":"2026-08-24T00:00:00+09:00","targetTo":"2026-08-30T23:59:59+09:00","articles":[{"business":"DELIVERY","informationType":"NEW_PRODUCT","title":"...","url":"https://example.com/a","sourceName":"..."}]}'
+  -d '{"executedAt":"2026-08-30T18:00:00+09:00","targetFrom":"2026-08-24T00:00:00+09:00","targetTo":"2026-08-30T23:59:59+09:00","articles":[{"business":"EXTERIOR","informationType":"NEW_PRODUCT","title":"...","url":"https://example.com/a","sourceName":"..."}]}'
 ```

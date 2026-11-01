@@ -3,9 +3,10 @@ import { notFound, redirect } from "next/navigation";
 import AnalysisReviewForm from "@/components/AnalysisReviewForm";
 import ArticleAnalysisActions from "@/components/ArticleAnalysisActions";
 import HeaderUserMenu from "@/components/HeaderUserMenu";
-import { ANALYSIS_STATUS_CLASS, ANALYSIS_STATUS_LABELS, FAILURE_KIND_LABELS, formatConfidence, formatElapsed, IMPORTANCE_LABELS, RELEVANCE_LABELS, toDuplicates, toRelatedFindings } from "@/lib/analysis-display";
+import { ANALYSIS_STATUS_CLASS, ANALYSIS_STATUS_LABELS, FAILURE_KIND_LABELS, formatConfidence, formatElapsed, IMPORTANCE_LABELS, relevanceLabel, toDuplicates, toRelatedFindings } from "@/lib/analysis-display";
 import { getAnalysisOverview, getArticleDetail } from "@/lib/article-analysis";
 import { getCurrentUser } from "@/lib/auth";
+import { getBusinesses } from "@/lib/businesses";
 import { formatDate, formatDateTime, formatMetrics, toStringArray } from "@/lib/industry-information";
 import { getTriageState } from "@/lib/triage";
 
@@ -25,7 +26,7 @@ export default async function ArticleDetailPage({ params }: { params: Promise<{ 
   if (user.status === "unauthenticated") redirect("/login");
 
   const { id } = await params;
-  const [article, overview] = await Promise.all([getArticleDetail(id), getAnalysisOverview()]);
+  const [article, overview, businesses] = await Promise.all([getArticleDetail(id), getAnalysisOverview(), getBusinesses()]);
   if (!article) notFound();
 
   const analysis = article.analyses[0] ?? null;
@@ -78,7 +79,7 @@ export default async function ArticleDetailPage({ params }: { params: Promise<{ 
           ) : <>
             <div className={`verdict-box ${analysis.relevance === "OUT_OF_SCOPE" ? "out" : ""}`}>
               <div className="verdict-line">
-                <strong>{RELEVANCE_LABELS[analysis.relevance]}</strong>
+                <strong>{relevanceLabel(businesses, analysis.relevance)}</strong>
                 <span className={`by ${reviewed ? "human" : "ai"}`}>{reviewed ? "人が確定済み" : "AI判定"}</span>
                 <span className="conf">信頼度 {formatConfidence(analysis.confidence)}</span>
                 <span className="conf-bar"><i style={{ width: `${Math.round(analysis.confidence * 100)}%` }} /></span>
@@ -148,10 +149,10 @@ export default async function ArticleDetailPage({ params }: { params: Promise<{ 
       <aside className="detail-side">
         <section className="side-panel">
           <h2>人による確定</h2>
-          <AnalysisReviewForm articleId={article.id} relevance={currentRelevance} importance={article.importance} weeklyCandidate={article.weeklyCandidate} note={article.reviewNote} />
+          <AnalysisReviewForm articleId={article.id} businesses={businesses} relevance={currentRelevance} importance={article.importance} weeklyCandidate={article.weeklyCandidate} note={article.reviewNote} />
           {reviewed && <div className="diff">
             <p><b>人が確定した内容</b></p>
-            事業区分　{RELEVANCE_LABELS[currentRelevance]}{analysis && analysis.relevance !== currentRelevance ? `（AIの判定は ${RELEVANCE_LABELS[analysis.relevance]}）` : ""}<br />
+            事業区分　{relevanceLabel(businesses, currentRelevance)}{analysis && analysis.relevance !== currentRelevance ? `（AIの判定は ${relevanceLabel(businesses, analysis.relevance)}）` : ""}<br />
             重要度　{IMPORTANCE_LABELS[article.importance]}{analysis && analysis.importance !== article.importance ? `（AIの判定は ${IMPORTANCE_LABELS[analysis.importance]}）` : ""}<br />
             仕分け　{article.weeklyCandidate ? "採用（週報の候補に含める）" : "不採用"}<br />
             {article.reviewedBy ?? "不明"} · {article.reviewedAt ? formatDateTime(article.reviewedAt) : ""}

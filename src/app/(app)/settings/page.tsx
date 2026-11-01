@@ -5,18 +5,22 @@ import { APP_CHANGELOG } from "@/lib/changelog";
 import PushToggle from "@/components/PushToggle";
 import CollectionSearchSettings, { type BusinessPolicyProps } from "@/components/CollectionSearchSettings";
 import { getCollectionSearchPolicies } from "@/lib/collection-search-settings";
-import { DELIVERY_SCOPE, LOCKER_SCOPE } from "@/lib/analysis-prompt";
-import { FEEDS } from "@/lib/collection";
+import { getBusinesses } from "@/lib/businesses";
 
 export default async function SettingsPage() {
   const user = await getCurrentUser();
   if (user.status === "unavailable") return <section className="content"><div className="empty-state"><p>認証状態を確認できませんでした。しばらくしてから再読み込みしてください。</p></div></section>;
   if (user.status === "unauthenticated") redirect("/login");
-  const policies = await getCollectionSearchPolicies();
-  const businesses: BusinessPolicyProps[] = [
-    { business: "DELIVERY", label: "宅配事業", policy: policies.DELIVERY.policy, updatedAt: policies.DELIVERY.updatedAt.toISOString(), pendingInstruction: policies.DELIVERY.pendingInstruction, scope: DELIVERY_SCOPE, feedQueries: FEEDS.filter((feed) => feed.business === "DELIVERY").map((feed) => feed.query) },
-    { business: "LOCKER", label: "ロッカー事業", policy: policies.LOCKER.policy, updatedAt: policies.LOCKER.updatedAt.toISOString(), pendingInstruction: policies.LOCKER.pendingInstruction, scope: LOCKER_SCOPE, feedQueries: FEEDS.filter((feed) => feed.business === "LOCKER").map((feed) => feed.query) },
-  ];
+  const [policies, defs] = await Promise.all([getCollectionSearchPolicies(), getBusinesses()]);
+  const businesses: BusinessPolicyProps[] = defs.map((def) => ({
+    business: def.key,
+    label: def.label,
+    policy: policies[def.key].policy,
+    updatedAt: policies[def.key].updatedAt.toISOString(),
+    pendingInstruction: policies[def.key].pendingInstruction,
+    scope: def.scope,
+    feedQueries: def.feeds.map((feed) => feed.query),
+  }));
 
   return <section className="content"><Link className="breadcrumb" href="/dashboard">‹　業界ニュースへ戻る</Link><header className="page-header"><div><p className="eyebrow">SETTINGS</p><h1>設定</h1><p className="lead">アカウント情報の確認と、アプリの更新履歴をまとめて確認できます。</p></div></header>
     <CollectionSearchSettings businesses={businesses} />
