@@ -29,6 +29,13 @@ export type ChangelogEntry = {
  */
 export const APP_CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.1",
+    date: "2026-11-01",
+    changes: [
+      "画像をメールで送るとき、画像の短辺の大きさによって送信が不当に断られることがあった問題を直しました。",
+    ],
+  },
+  {
     version: "1.20.0",
     date: "2026-11-01",
     changes: [
