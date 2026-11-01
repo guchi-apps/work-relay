@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { MAX_ZIP_SIZE_BYTES, WIDTH_PRESETS, buildImageMailZip, type ImageMailZipResult, type WidthPreset } from "@/lib/image-mail-client";
+import { formatPartSuffix } from "@/lib/image-mail-split";
+import { WIDTH_PRESETS, buildImageMailZip, type ImageMailZipResult, type WidthPreset } from "@/lib/image-mail-client";
 
 type WidthMode = "auto" | WidthPreset;
 type ShareNotice = { kind: "received"; count: number } | { kind: "error"; message: string };
@@ -19,13 +20,16 @@ type Props = {
   /** 共有の受け口で断ったときの理由（`?shareError=`）。 */
   shareError: string | null;
 };
-type SendResult = { ok: true; messageId?: string } | { ok: false; message: string };
+type PartStatus = "waiting" | "sending" | "done" | "failed";
+type SendResult = { ok: true } | { ok: false; message: string };
 
 interface SelectedImage {
   id: string;
   file: File;
   previewUrl: string;
 }
+
+const PART_STATUS_LABELS: Record<PartStatus, string> = { waiting: "待機中", sending: "送信中…", done: "送信済み", failed: "失敗" };
 
 function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
@@ -40,7 +44,9 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
   const [building, setBuilding] = useState(false);
   const [buildError, setBuildError] = useState<string | null>(null);
   const [buildResult, setBuildResult] = useState<ImageMailZipResult | null>(null);
-  const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null);
+  // 分割した各通の送信状態と、通ごとの重複送信防止キー（#332）。
+  const [partKeys, setPartKeys] = useState<string[]>([]);
+  const [partStatuses, setPartStatuses] = useState<PartStatus[]>([]);
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<SendResult | null>(null);
 
@@ -93,7 +99,8 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
   function resetOutcome() {
     setBuildResult(null);
     setBuildError(null);
-    setIdempotencyKey(null);
+    setPartKeys([]);
+    setPartStatuses([]);
     setSendResult(null);
   }
 
@@ -120,7 +127,8 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
       const manualWidth = widthMode === "auto" ? null : widthMode;
       const result = await buildImageMailZip(images.map((image) => image.file), manualWidth);
       setBuildResult(result);
-      setIdempotencyKey(crypto.randomUUID());
+      setPartKeys(result.parts.map(() => crypto.randomUUID()));
+      setPartStatuses(result.parts.map(() => "waiting"));
       setSendResult(null);
     } catch (error) {
       setBuildResult(null);
@@ -130,37 +138,62 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
     }
   }
 
+  function setPartStatus(index: number, status: PartStatus) {
+    setPartStatuses((current) => current.map((value, i) => (i === index ? status : value)));
+  }
+
+  // 送信済みでない最初の通から順に送る。失敗したらそこで止め、再度押すとその通から再開する。
   async function handleSend() {
-    if (!buildResult || !idempotencyKey) return;
+    if (!buildResult) return;
     setSending(true);
     setSendResult(null);
+    const total = buildResult.parts.length;
     try {
-      const form = new FormData();
-      form.set("title", title.trim());
-      form.set("imageCount", String(images.length));
-      form.set("width", String(buildResult.width));
-      form.set("idempotencyKey", idempotencyKey);
-      form.set("zip", new Blob([new Uint8Array(buildResult.zip)], { type: "application/zip" }), "images.zip");
+      for (const [index, part] of buildResult.parts.entries()) {
+        if (partStatuses[index] === "done") continue;
+        setPartStatus(index, "sending");
+        const form = new FormData();
+        form.set("title", title.trim());
+        form.set("imageCount", String(part.imageCount));
+        form.set("width", String(buildResult.width));
+        form.set("idempotencyKey", partKeys[index]);
+        form.set("partIndex", String(index + 1));
+        form.set("partTotal", String(total));
+        form.set("zip", new Blob([new Uint8Array(part.zip)], { type: "application/zip" }), "images.zip");
 
-      const response = await fetch("/api/image-mail/send", { method: "POST", body: form });
-      const body: unknown = await response.json().catch(() => null);
-      if (!response.ok) {
-        const message = body && typeof body === "object" && "message" in body && typeof body.message === "string" ? body.message : "送信に失敗しました";
-        setSendResult({ ok: false, message });
-        return;
+        let failure: string | null = null;
+        try {
+          const response = await fetch("/api/image-mail/send", { method: "POST", body: form });
+          if (!response.ok) {
+            const body: unknown = await response.json().catch(() => null);
+            failure = body && typeof body === "object" && "message" in body && typeof body.message === "string" ? body.message : "送信に失敗しました";
+          }
+        } catch {
+          failure = "通信に失敗しました。しばらくしてから再試行してください";
+        }
+        if (failure) {
+          setPartStatus(index, "failed");
+          setSendResult({ ok: false, message: total > 1 ? `${index + 1}/${total}通目の送信に失敗しました。${failure}` : failure });
+          return;
+        }
+        setPartStatus(index, "done");
       }
-      const messageId = body && typeof body === "object" && "messageId" in body && typeof body.messageId === "string" ? body.messageId : undefined;
-      setSendResult({ ok: true, messageId });
-    } catch {
-      setSendResult({ ok: false, message: "通信に失敗しました。しばらくしてから再試行してください" });
+      setSendResult({ ok: true });
     } finally {
       setSending(false);
     }
   }
 
-  const zipTooLarge = buildResult !== null && buildResult.zip.byteLength > MAX_ZIP_SIZE_BYTES;
+  const partCount = buildResult?.parts.length ?? 0;
+  const doneCount = partStatuses.filter((status) => status === "done").length;
+  const allSent = partCount > 0 && doneCount === partCount;
+  const nextPart = partStatuses.findIndex((status) => status !== "done") + 1;
   const canBuild = !building && images.length > 0 && title.trim().length > 0;
-  const canSend = !sending && buildResult !== null && !zipTooLarge;
+  const canSend = !sending && buildResult !== null && !allSent;
+
+  const sendLabel = sending
+    ? partCount > 1 ? `${Math.max(nextPart, 1)}/${partCount}を送信中…` : "送信中…"
+    : partCount > 1 ? (doneCount > 0 ? `${nextPart}/${partCount}から送信を再開する` : `${partCount}通に分けて送信する`) : "この内容で送信する";
 
   return (
     <>
@@ -216,7 +249,7 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
       </div>
 
       <div className="imgmail-block">
-        <div className="imgmail-block-head"><h2>横幅</h2><span>2MBを超えると自動で下げます</span></div>
+        <div className="imgmail-block-head"><h2>横幅</h2><span>2MBを超えると自動で下げ、それでも超えたら分割します</span></div>
         <div className="segmented">
           <button type="button" className={widthMode === "auto" ? "active" : ""} onClick={() => { setWidthMode("auto"); resetOutcome(); }}>自動<small>1200→900→600</small></button>
           {WIDTH_PRESETS.map((preset) => (
@@ -234,25 +267,34 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
           <div className="result-grid">
             <div><small>画像数</small><p>{images.length}枚</p></div>
             <div><small>最終横幅</small><p>{buildResult.width}px</p></div>
-            <div><small>ZIPサイズ</small><p>{formatBytes(buildResult.zip.byteLength)}</p></div>
+            <div><small>通数</small><p>{partCount}通</p></div>
           </div>
           {buildResult.autoDowngraded && <div className="result-note">ℹ️　2MBを超えたため、{buildResult.width}pxへ自動で縮小しました。</div>}
-          <div className="subject-row"><span className="subject-fixed">[画像]</span><span className="subject-title">{title.trim() || "（タイトル未入力）"}</span></div>
+          {partCount > 1 && <div className="result-note">ℹ️　合計が2MBを超えるため、{partCount}通に分けました。1通ずつ順に送信します。</div>}
+          {partCount > 1 && (
+            <div className="parts">
+              {buildResult.parts.map((part, index) => (
+                <div key={index} className="part">
+                  <b>{index + 1}/{partCount}</b>
+                  <span>{part.imageCount}枚　{formatBytes(part.zip.byteLength)}</span>
+                  <span className={`badge ${partStatuses[index] ?? "waiting"}`}>{PART_STATUS_LABELS[partStatuses[index] ?? "waiting"]}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="subject-row"><span className="subject-fixed">[画像]</span><span className="subject-title">{title.trim() || "（タイトル未入力）"}{formatPartSuffix(Math.max(nextPart, 1), partCount)}</span></div>
           <p className="dest-note">宛先・BCCは設定済みの社用アドレス固定です（画面から変更はできません）。</p>
         </div>
       )}
 
-      {zipTooLarge && <p className="helper" style={{ color: "#b8541c" }}>600pxまで下げても2MBを超えています。画像の枚数を減らしてから再度お試しください。</p>}
-
-      <button type="button" className="cta full big" disabled={!canSend} onClick={handleSend}>{sending ? "送信中…" : "この内容で送信する"}</button>
+      <button type="button" className="cta full big" disabled={!canSend} onClick={handleSend}>{sendLabel}</button>
 
       {sendResult && (
         sendResult.ok ? (
           <div className="success-banner">
             <div className="dot">✓</div>
             <div>
-              <p>送信しました。Gmailで受信を確認してください。</p>
-              {sendResult.messageId && <small>messageId: {sendResult.messageId}</small>}
+              <p>{partCount > 1 ? `${partCount}通すべて送信しました。` : "送信しました。"}Gmailで受信を確認してください。</p>
             </div>
           </div>
         ) : (
@@ -263,7 +305,7 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
         )
       )}
 
-      <p className="helper">600pxでも2MBを超える場合は送信できません。画像を減らしてお試しください。</p>
+      <p className="helper">600pxでも2MBを超える場合は、2MB以下のZIPに分けて複数のメールで送ります。</p>
     </div>
     </>
   );

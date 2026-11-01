@@ -195,3 +195,5 @@ a.codex-strip{text-decoration:none;transition:background .15s}a.codex-strip:hove
 .relay-a{animation:relay-a 2.4s ease-in-out infinite}.relay-b{animation:relay-b 2.4s ease-in-out infinite}.relay-l{animation:relay-l 2.4s ease-in-out infinite}
 @keyframes relay-a{0%,100%{opacity:1}50%{opacity:.55}}@keyframes relay-b{0%,100%{opacity:.55}50%{opacity:1}}@keyframes relay-l{0%,15%{opacity:.35}55%,100%{opacity:1}}
 @media(prefers-reduced-motion:reduce){.relay-a,.relay-b,.relay-l{animation:none}}
+
+.parts{display:flex;flex-direction:column;gap:6px}.part{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;background:#fff;border:1px solid #cae6df;border-radius:8px;padding:8px 10px;font-size:12px}.badge{font-size:10.5px;font-weight:700;border-radius:999px;padding:2px 9px;white-space:nowrap}.badge.done{background:#d5efe7;color:#0b5852}.badge.sending{background:#fff2c9;color:#7a5a00}.badge.waiting{background:#e8eeec;color:var(--muted)}.badge.failed{background:#fdece0;color:#b8541c}
