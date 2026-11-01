@@ -157,6 +157,15 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
     resetOutcome();
   }
 
+  // 送信完了後に、次の写真を送れるよう入力をまとめて消す（#370）。短辺の設定は残す。
+  function resetAll() {
+    for (const image of imagesRef.current) if (image.previewUrl) URL.revokeObjectURL(image.previewUrl);
+    setImages([]);
+    setTitle("");
+    setShareNotice(null);
+    resetOutcome();
+  }
+
   async function handleBuild() {
     setBuilding(true);
     setBuildError(null);
@@ -348,12 +357,15 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
 
       {sendResult && (
         sendResult.ok ? (
-          <div className="success-banner">
-            <div className="dot">✓</div>
-            <div>
-              <p>{partCount > 1 ? `${partCount}通すべて送信しました。` : "送信しました。"}Gmailで受信を確認してください。</p>
+          <>
+            <div className="success-banner">
+              <div className="dot">✓</div>
+              <div>
+                <p>{partCount > 1 ? `${partCount}通すべて送信しました。` : "送信しました。"}Gmailで受信を確認してください。</p>
+              </div>
             </div>
-          </div>
+            <button type="button" className="cta ghost full" onClick={resetAll}>次の写真を送る（入力をクリア）</button>
+          </>
         ) : (
           <div className="success-banner" style={{ background: "#fdece0", borderColor: "#f0c39a" }}>
             <div className="dot" style={{ background: "#b8541c" }}>!</div>
