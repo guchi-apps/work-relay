@@ -129,8 +129,6 @@ jobs:
       AIDE_TEXT_MAIL_TOKEN: ${{ secrets.AIDE_TEXT_MAIL_TOKEN }}
       SHARED_TOKEN_API_SECRET: ${{ secrets.SHARED_TOKEN_API_SECRET }}
       ISSUE_DECK_URL: ${{ vars.APP_BASE_URL }}
-      TARGET_DIR: ${{ secrets.TARGET_DIR }}
-      SIGNALY_WEBHOOK_URL: ${{ secrets.SIGNALY_WEBHOOK_URL }}
 
     steps:
       - name: Checkout code
@@ -227,8 +225,6 @@ jobs:
       AIDE_TEXT_MAIL_TOKEN: ${{ secrets.AIDE_TEXT_MAIL_TOKEN }}
       SHARED_TOKEN_API_SECRET: ${{ secrets.SHARED_TOKEN_API_SECRET }}
       ISSUE_DECK_URL: ${{ vars.APP_BASE_URL }}
-      TARGET_DIR: ${{ secrets.TARGET_DIR }}
-      SIGNALY_WEBHOOK_URL: ${{ secrets.SIGNALY_WEBHOOK_URL }}
 
     steps:
       - name: Checkout code
@@ -380,66 +376,3 @@ jobs:
           else
             echo "::warning::$URL が開けませんでした（HTTP $CODE）。デプロイ自体は成功しています。DNSのAレコード・ApacheのVirtualHost・TLS証明書を確認してください。"
           fi
-
-  notify:
-    runs-on: ubuntu-latest
-    needs: [tag, build, deploy]
-    if: always()
-
-    env:
-      SIGNALY_WEBHOOK_URL: ${{ secrets.SIGNALY_WEBHOOK_URL }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Determine workflow status
-        id: status
-        run: |
-          tag="${{ needs.tag.result }}"
-          build="${{ needs.build.result }}"
-          deploy="${{ needs.deploy.result }}"
-          if [ "$tag" = "success" ] && [ "$build" = "success" ] && [ "$deploy" = "success" ]; then
-            result=success
-          elif [ "$tag" = "cancelled" ] || [ "$build" = "cancelled" ] || [ "$deploy" = "cancelled" ]; then
-            result=cancelled
-          else
-            result=failure
-          fi
-          echo "result=$result" >> "$GITHUB_OUTPUT"
-
-      - name: Signaly に通知
-        # 通知はCIやデプロイの合否そのものではない。ここが失敗してもrun全体を
-        # 落とさない（guchi-apps/issue-deck#1302）。
-        continue-on-error: true
-        env:
-          SIGNALY_WEBHOOK_URL: ${{ env.SIGNALY_WEBHOOK_URL }}
-          NOTIFY_APP: research-desk
-          NOTIFY_KIND: デプロイ
-          NOTIFY_STATUS: ${{ steps.status.outputs.result }}
-        run: bash .github/scripts/signaly-notify.sh
-
-  notify-release:
-    runs-on: ubuntu-latest
-    needs: [tag, deploy, release]
-    if: always() && needs.release.result != 'skipped'
-
-    env:
-      SIGNALY_WEBHOOK_URL: ${{ secrets.SIGNALY_WEBHOOK_URL }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Signaly に通知
-        continue-on-error: true
-        env:
-          SIGNALY_WEBHOOK_URL: ${{ env.SIGNALY_WEBHOOK_URL }}
-          # リリースだけはCI・デプロイと別のチャンネルへ送る（guchi-apps/issue-deck#2391）。
-          # 未登録なら空が渡り、スクリプトが従来のチャンネルへフォールバックする。
-          SIGNALY_RELEASE_WEBHOOK_URL: ${{ secrets.SIGNALY_RELEASE_WEBHOOK_URL }}
-          NOTIFY_STATUS: ${{ needs.release.result }}
-          NOTIFY_APP: research-desk
-          NOTIFY_KIND: リリース
-          NOTIFY_VERSION: ${{ needs.tag.outputs.tag }}
-        run: bash .github/scripts/signaly-notify.sh

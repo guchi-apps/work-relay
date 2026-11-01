@@ -225,19 +225,8 @@ jobs:
     needs: [detect, build, testflight]
     if: always() && needs.detect.result != 'skipped' && (needs.detect.result == 'failure' || needs.build.result == 'failure' || needs.testflight.result == 'failure' || needs.testflight.result == 'success')
     runs-on: ubuntu-latest
-    env:
-      SIGNALY_WEBHOOK_URL: ${{ secrets.SIGNALY_WEBHOOK_URL }}
     steps:
       - uses: actions/checkout@v4
-      - name: Signaly に通知
-        continue-on-error: true
-        env:
-          NOTIFY_APP: research-desk
-          NOTIFY_KIND: iOS配布（TestFlight）
-          NOTIFY_STATUS: ${{ needs.testflight.result == 'success' && 'success' || 'failure' }}
-          NOTIFY_JOB: ios-testflight
-        run: bash .github/scripts/signaly-notify.sh
-
       - name: Discord に異常を通知
         # 失敗・異常だけ送る（成功・キャンセルはスクリプトが送らない）。結果は改変せず、
         # 通知の失敗でrunを落とさない（issue-deck#5057）。
