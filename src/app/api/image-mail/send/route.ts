@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 const MAX_TITLE_LENGTH = 200;
 const MAX_ZIP_SIZE_BYTES = 2 * 1024 * 1024;
 const MAX_PART_TOTAL = 30;
-const ALLOWED_WIDTHS = [1200, 900, 600];
+const ALLOWED_WIDTHS = [800, 1200, 1600];
 const REQUEST_TIMEOUT_MS = 30_000;
 
 interface AideImageMailConfig {
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
   if (title.length > MAX_TITLE_LENGTH) return json({ error: "invalid_request", message: `写真タイトルは${MAX_TITLE_LENGTH}文字までです` }, 400);
   if (typeof idempotencyKey !== "string" || !idempotencyKey.trim()) return json({ error: "invalid_request", message: "idempotencyKeyが必要です" }, 400);
   if (!Number.isInteger(imageCount) || imageCount < 1) return json({ error: "invalid_request", message: "imageCountが不正です" }, 400);
-  if (!ALLOWED_WIDTHS.includes(width)) return json({ error: "invalid_request", message: "widthは1200・900・600のいずれかで指定してください" }, 400);
+  if (!ALLOWED_WIDTHS.includes(width)) return json({ error: "invalid_request", message: "widthは800・1200・1600のいずれかで指定してください" }, 400);
   if (!Number.isInteger(partTotal) || partTotal < 1 || partTotal > MAX_PART_TOTAL || !Number.isInteger(partIndex) || partIndex < 1 || partIndex > partTotal) {
     return json({ error: "invalid_request", message: "partIndex・partTotalが不正です" }, 400);
   }
