@@ -247,7 +247,7 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
       </div>
 
       <div className="imgmail-block">
-        <div className="imgmail-block-head"><h2>短辺</h2><span>縦横のうち短いほうの長さ。2MBを超えたら分割します</span></div>
+        <div className="imgmail-block-head"><h2>短辺</h2><span>縦横のうち短いほうの長さ。3MBを超えたら分割します</span></div>
         <div className="segmented">
           {WIDTH_PRESETS.map((preset) => (
             <button key={preset} type="button" className={widthMode === preset ? "active" : ""} onClick={() => { setWidthMode(preset); resetOutcome(); }}>{preset}px</button>
@@ -266,7 +266,7 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
             <div><small>短辺</small><p>{buildResult.width}px</p></div>
             <div><small>通数</small><p>{partCount}通</p></div>
           </div>
-          {partCount > 1 && <div className="result-note">ℹ️　合計が2MBを超えるため、{partCount}通に分けました。1通ずつ順に送信します。</div>}
+          {partCount > 1 && <div className="result-note">ℹ️　合計が3MBを超えるため、{partCount}通に分けました。1通ずつ順に送信します。</div>}
           {partCount > 1 && (
             <div className="parts">
               {buildResult.parts.map((part, index) => (
@@ -301,7 +301,7 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
         )
       )}
 
-      <p className="helper">2MBを超える場合は、2MB以下のZIPに分けて複数のメールで送ります。</p>
+      <p className="helper">3MBを超える場合は、3MB以下のZIPに分けて複数のメールで送ります。</p>
     </div>
     </>
   );
