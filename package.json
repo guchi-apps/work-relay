@@ -12,7 +12,7 @@
     "typecheck": "next typegen && tsc --noEmit",
     "build:ci": "prisma generate && next build",
     "postinstall": "prisma generate",
-    "version": "node scripts/version-changelog.mjs",
+    "version": "node scripts/version-changelog.mjs && node ios/scripts/sync-version.mjs && git add ios/WorkRelay.xcodeproj/project.pbxproj",
     "env:init": "cp -n .env.local.example .env.local && echo '.env.local を編集してください'",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:seed:ci": "node prisma/seed-ci.mjs"
