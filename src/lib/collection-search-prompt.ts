@@ -45,7 +45,7 @@ export type CollectedInformationType = (typeof COLLECTED_INFORMATION_TYPES)[numb
 
 /**
  * 1回の収集で受け取る記事の上限。AIDE経由の週報登録（`/api/internal/weekly-report`）の
- * 入力上限（全体10件・各事業5件）に揃えてある。ChatGPT側と並べて品質を見比べるため、
+ * 入力上限（全体15件・各事業5件）に揃えてある。ChatGPT側と並べて品質を見比べるため、
  * 取り込み量の条件を同じにしている。
  */
 export const COLLECTION_SEARCH_ARTICLE_LIMIT = 15;
