@@ -8,7 +8,7 @@ import { decideWeeklyCap, IMPORTANCE_RANK, type ImportanceValue, type PriorityFi
 
 // 収集の上限（#94で「1回10件・事業ごと週5件」から広げた）。無関係な記事は新着記事画面の仕分けで
 // 人が不採用にする前提なので、取り込みは多めにし、上限の枠には不採用の記事を数えない
-// （`decideWeeklyCap()`）。AIDE経由の週報登録の入力上限（1回10件・各事業5件）はAIDE側との
+// （`decideWeeklyCap()`）。AIDE経由の週報登録の入力上限（1回15件・各事業5件。#369で10件から上げた）はAIDE側との
 // 契約なので変えていない（`src/app/api/internal/weekly-report/route.ts`）。
 export const COLLECTION_LIMIT = 30;
 const BUSINESS_WEEKLY_LIMIT = 15;
