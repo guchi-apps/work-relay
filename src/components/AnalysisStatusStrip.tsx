@@ -32,7 +32,7 @@ export default function AnalysisStatusStrip({ overview, now = new Date(), linked
         {worker && stale ? "（停止中）" : ""}
       </span>
       <span className="queue">
-        待ち <b>{overview.queued + overview.briefQueued}</b> 件　·　実行中 <b>{overview.running + overview.briefRunning}</b> 件
+        待ち <b>{overview.queued}</b> 件　·　実行中 <b>{overview.running}</b> 件
         {overview.authRequired > 0 && <>　·　認証待ち <b>{overview.authRequired}</b> 件</>}
         {overview.failed > 0 && <>　·　失敗 <b>{overview.failed}</b> 件</>}
       </span>

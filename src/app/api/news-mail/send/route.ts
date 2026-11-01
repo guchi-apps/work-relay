@@ -2,11 +2,9 @@ import { getCurrentUser } from "@/lib/auth";
 import { listIndustryInformationByIds } from "@/lib/industry-information";
 import { json } from "@/lib/internal-auth";
 import { getSharedToken } from "@/lib/shared-token";
-import { getWeekRange } from "@/lib/jst-week";
 import { getBusinesses } from "@/lib/businesses";
-import { buildNewsMail, parseNewsMailRequest, toNewsMailArticle, type NewsMailBrief } from "@/lib/news-mail";
+import { buildNewsMail, parseNewsMailRequest, toNewsMailArticle } from "@/lib/news-mail";
 import { toNewsMailArticleDto } from "@/lib/news-mail-articles";
-import { getLatestWeeklyBrief } from "@/lib/weekly-brief";
 
 export const runtime = "nodejs";
 
@@ -27,15 +25,15 @@ async function readAideNewsMailConfig(): Promise<AideNewsMailConfig | null> {
 }
 
 /**
- * 選んだ業界ニュースを1通の週報メールにしてAIDEへ中継する（#110）。
+ * 業界ニュースの記事1件を、ひとことを添えてメールにしてAIDEへ中継する（#385。元は#110の週報メール）。
  *
- * **本文はここで組み立てる。** ブラウザから受け取るのは「どの記事を送るか」と件名だけで、
+ * **本文はここで組み立てる。** ブラウザから受け取るのは「どの記事を送るか」・件名・ひとことだけで、
  * 記事の中身はIDでDBを引き直す。画面のプレビューと同じ`buildNewsMail()`を使うため、
  * 見えている内容と送る内容は一致する（ブラウザから任意のHTMLを送れる口は作らない）。
  *
  * 認証はSupabaseのセッション（`/api/image-mail/send`と同じで、ブラウザ→サーバー方向のため
  * `/api/internal/*`の共有シークレットではない）。Gmail送信・宛先固定・二重送信の防止は
- * AIDE側が担う。AIDE側の受け口は別Issueで実装するため、それまでは502が返る。
+ * AIDE側が担う。AIDEへ渡す項目は週報メールのときと同じ（`articleCount`は常に1）。
  */
 export async function POST(request: Request) {
   const user = await getCurrentUser();
@@ -55,23 +53,13 @@ export async function POST(request: Request) {
   const input = parseNewsMailRequest(body);
   if (!input) return json({ error: "invalid_request", message: "送る記事と件名を確認してください" }, 400);
 
-  const items = await listIndustryInformationByIds(input.articleIds);
-  if (items.length === 0) return json({ error: "no_articles", message: "送る記事が見つかりませんでした" }, 400);
-
-  const range = getWeekRange(input.weekOffset);
-  // 総括は完了しているものだけ載せる。生成中・失敗しているときは本文からその節ごと落とす
-  // （画面でも「総括が無くても送信できます」と案内している）。
-  const latest = await getLatestWeeklyBrief(input.weekOffset);
-  const brief: NewsMailBrief | null =
-    latest && latest.status === "COMPLETED" && latest.headline && latest.overview
-      ? { headline: latest.headline, overview: latest.overview, topics: latest.topics }
-      : null;
+  const [item] = await listIndustryInformationByIds([input.articleId]);
+  if (!item) return json({ error: "no_articles", message: "送る記事が見つかりませんでした" }, 404);
 
   const mail = buildNewsMail({
-    range,
+    article: toNewsMailArticle(toNewsMailArticleDto(item)),
     subjectBody: input.subjectBody,
-    articles: items.map(toNewsMailArticleDto).map(toNewsMailArticle),
-    brief,
+    note: input.note,
     businesses: await getBusinesses(),
   });
 
@@ -86,7 +74,7 @@ export async function POST(request: Request) {
         subject: mail.subject,
         bodyText: mail.text,
         bodyHtml: mail.html,
-        articleCount: items.length,
+        articleCount: 1,
       }),
       signal: controller.signal,
     });
@@ -95,7 +83,7 @@ export async function POST(request: Request) {
       const message = payload && typeof payload === "object" && "message" in payload && typeof payload.message === "string" ? payload.message : `AIDEへの送信に失敗しました（HTTP ${response.status}）`;
       return json({ error: "send_failed", message }, 502);
     }
-    return json({ ok: true, articleCount: items.length, hasBrief: brief !== null, ...(payload && typeof payload === "object" ? payload : {}) }, 200);
+    return json({ ok: true, ...(payload && typeof payload === "object" ? payload : {}) }, 200);
   } catch {
     return json({ error: "send_failed", message: "AIDEへの送信に失敗しました。しばらくしてから再試行してください" }, 502);
   } finally {

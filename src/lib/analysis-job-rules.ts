@@ -14,7 +14,7 @@ export type FailureKindValue = "AUTH_REQUIRED" | "RATE_LIMITED" | "INVALID_OUTPU
 export const FAILURE_MESSAGE_LIMIT = 600;
 
 /** ポーラーがジョブを保持できる時間（秒）。これを過ぎた`RUNNING`は落ちたとみなして再取得できる。
- * 記事の解析（`src/lib/article-analysis.ts`）と週の総括（`src/lib/weekly-brief.ts`）が同じ
+ * 記事の解析（`src/lib/article-analysis.ts`）と収集ジョブ（`src/lib/collection-search.ts`）が同じ
  * ポーラーに実行されるため、値はここ1か所に置く。 */
 export const LEASE_SECONDS = 15 * 60;
 

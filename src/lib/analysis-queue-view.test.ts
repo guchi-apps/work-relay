@@ -65,12 +65,11 @@ describe("startOfJstDay", () => {
 });
 
 describe("orderQueue", () => {
-  it("記事を古い順に並べ、週の総括は積んだ時刻に関わらず記事の後ろへ回す", () => {
+  it("積んだ時刻の古い順に並べる", () => {
     const entries = [
-      { id: "b1", kind: "weekly_brief" as const, queuedAt: new Date("2026-09-17T05:00:00Z") },
-      { id: "a2", kind: "article" as const, queuedAt: new Date("2026-09-17T05:05:00Z") },
-      { id: "a1", kind: "article" as const, queuedAt: new Date("2026-09-17T05:01:00Z") },
+      { id: "a2", queuedAt: new Date("2026-09-17T05:05:00Z") },
+      { id: "a1", queuedAt: new Date("2026-09-17T05:01:00Z") },
     ];
-    assert.deepEqual(orderQueue(entries).map((entry) => entry.id), ["a1", "a2", "b1"]);
+    assert.deepEqual(orderQueue(entries).map((entry) => entry.id), ["a1", "a2"]);
   });
 });

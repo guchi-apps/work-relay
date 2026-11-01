@@ -4,7 +4,7 @@ import HeaderUserMenu from "@/components/HeaderUserMenu";
 import SharePanel, { type ExistingArticleView } from "@/components/SharePanel";
 import { getCurrentUser } from "@/lib/auth";
 import { getBusinesses } from "@/lib/businesses";
-import { buildNewsMailPickPath, fallbackArticleTitle, normalizeSharedText } from "@/lib/share-inbox";
+import { buildArticleMailPath, fallbackArticleTitle, normalizeSharedText } from "@/lib/share-inbox";
 import { findArticleByUrl } from "@/lib/shared-article";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +36,7 @@ export default async function SharePage({ searchParams }: { searchParams: Promis
         collectedAtIso: existingRow.collectedAt.toISOString(),
         analysisStatus: existingRow.analysisStatus,
         triage: existingRow.triage,
-        pickPath: buildNewsMailPickPath(existingRow.id, existingRow.publishedAt ?? existingRow.collectedAt, new Date()),
+        pickPath: buildArticleMailPath(existingRow.id),
       }
     : null;
 
@@ -51,7 +51,7 @@ export default async function SharePage({ searchParams }: { searchParams: Promis
         <div>
           <p className="eyebrow">SHARED FROM OTHER APPS</p>
           <h1>{heading}</h1>
-          <p className="lead">他のアプリの共有メニューから受け取りました。新着記事に追加すると、AI解析のあと「ニュースを送る」に並びます。</p>
+          <p className="lead">他のアプリの共有メニューから受け取りました。新着記事に追加すると、そのまま社用メールに送れます。</p>
         </div>
         <div className="top-actions">
           <HeaderUserMenu />

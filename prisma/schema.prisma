@@ -259,62 +259,14 @@ model AnalysisWorker {
   @@map("analysis_workers")
 }
 
-// --- 週報メールの「週の総括」（#110） --------------------------------------------------
-// 記事1件ずつの解析（ArticleAnalysisJob）と同じポーラー（scripts/codex-analysis-worker.mjs）が
-// 実行するが、対象が記事ではなく「週 × 画面で選んだ記事の集合」なので別テーブルにしてある。
-// ArticleAnalysisJob.articleId は NOT NULL で記事側の analysisStatus とも連動しており、
-// nullable にして相乗りさせると記事解析側の前提が広く崩れるため。
-
-/// 週の対象記事の拾い方。画面の「対象の取り方」と1対1で対応する。
-enum WeeklyBriefBasis {
-  PUBLISHED
-  COLLECTED
-  EITHER
-}
-
-model WeeklyBriefJob {
-  id             String               @id @default(cuid())
-  weekStart      DateTime
-  weekEnd        DateTime
-  basis          WeeklyBriefBasis     @default(EITHER)
-  /// 総括の対象にした記事ID（画面でチェックが入っていたもの）のJSON配列。
-  articleIds     Json
-  // 同じ週の総括を二重に走らせない鍵。`QUEUED`・`RUNNING`の間だけ週の開始日が入り、
-  // 終了時にnullへ戻す（ArticleAnalysisJob.activeKeyと同じ作り）。
-  activeKey      String?              @unique
-  status         AnalysisJobStatus    @default(QUEUED)
-  requestedBy    String?
-  queuedAt       DateTime             @default(now())
-  startedAt      DateTime?
-  finishedAt     DateTime?
-  leaseExpiresAt DateTime?
-  workerHost     String?
-  failureKind    AnalysisFailureKind?
-  failureMessage String?              @db.Text
-  // 結果は1ジョブ1件なので、別テーブルにせず同じ行へ持つ。
-  headline       String?              @db.Text
-  overview       String?              @db.Text
-  /// 注目トピック（`{ label, text }`の配列）。項目が増えても移行なしで持てるようJSONにする。
-  topics         Json?
-  model          String?
-  codexAuthMode  String?
-  durationMs     Int?
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
-
-  @@index([status, queuedAt])
-  @@index([weekStart, queuedAt])
-  @@map("weekly_brief_jobs")
-}
-
 // ChatGPT定期タスクの代わりに、Codex CLI（Web検索）で業界ニュースを集める「収集ジョブ」。
-// 記事解析・週の総括と同じVPS常駐ポーラーが実行する（src/lib/collection-search.ts）。
-// テーブルを分けたのは WeeklyBriefJob と同じ理由（ArticleAnalysisJob は articleId が必須で
+// 記事解析と同じVPS常駐ポーラーが実行する（src/lib/collection-search.ts）。
+// テーブルを分けたのは ArticleAnalysisJob と同じ理由（ArticleAnalysisJob は articleId が必須で
 // 記事側の analysisStatus と連動するため、相乗りさせると前提が崩れる）。
 model CollectionSearchJob {
   id              String               @id @default(cuid())
   // 同時に1本に絞る鍵。`QUEUED`・`RUNNING`の間だけJSTの日付（YYYY-MM-DD）が入り、終了時にnullへ戻す
-  // （WeeklyBriefJob.activeKeyと同じ作り）。
+  // （ArticleAnalysisJob.activeKeyと同じ作り）。
   activeKey       String?              @unique
   status          AnalysisJobStatus    @default(QUEUED)
   requestedBy     String?
