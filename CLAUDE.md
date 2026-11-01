@@ -57,7 +57,7 @@ gateは旧配布物の削除・展開・`.env`更新・`pnpm install --prod --fr
   （`op://apps/work-relay/deploy-ssh-key`）で、VPSの`authorized_keys`の`command=`がアプリ名を固定する
 - **gateの外の処理はデプロイで動かせない。** マイグレーション直前の処理だけは`deploy/pre-migrate.sh`に
   置ける。記事AI解析のポーラーが`online`かの確認（gate導入前は警告のみ）はデプロイでは行わなくなった
-- `TARGET_DIR`は使わなくなった（マニフェストには移行確認まで残している）
+- `TARGET_DIR`は使わなくなった（マニフェストからも撤去した）
 
 ## 出力言語
 
