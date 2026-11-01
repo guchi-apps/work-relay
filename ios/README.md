@@ -103,9 +103,18 @@ App Store Connect API キーは**新しく作らず**、他のiOSアプリと共
 AndroidのWeb Share Targetは従来どおり使えます（[docs/share-shortcut.md](../docs/share-shortcut.md)）。
 
 - コードは`ios/WorkRelayShare/`（拡張）・`ios/Shared/`（アプリと共通）・`ios/WorkRelay/ShareImporter.swift`（アプリ側の取り込み）
-- **App ID `com.gucchii.workrelay.ShareExtension`とApp Group `group.com.gucchii.workrelay`**は、自動署名（`-allowProvisioningUpdates`と
-  App Store ConnectのAPIキー）で初回のArchive時に登録される想定。登録されずに署名で止まったら、Developerサイトの Identifiers で
-  上記のApp IDとApp Groupを作り、両方のApp IDにApp Groups機能を付ける
+- **App ID `com.gucchii.workrelay.ShareExtension`とApp Group `group.com.gucchii.workrelay`**: App IDはAPIキーの自動署名で作られるが、
+  **App Groupは自動では作られない**（App Store Connect APIにApp Groupの作成口が無い）。未登録だと署名・アーカイブが
+  `Authentication failed: Make sure a bearer token was provided…` → `No profiles for 'com.gucchii.workrelay' were found`で止まる
+  （APIキー自体は有効でも、この文言で出る。#358）。**配布の前にDeveloperサイトの Identifiers →「App Groups」で
+  `group.com.gucchii.workrelay`を作り、`com.gucchii.workrelay`と`com.gucchii.workrelay.ShareExtension`の両方のApp IDの
+  App Groups機能にそのグループを割り当てる**（本人のAppleアカウントでのログインが要る）。そのあと失敗したrunを「Re-run failed jobs」で再実行する
+  - **グループを作っただけでは足りない**（#361）。各App IDの App Groups の「Configure」でグループにチェックし、**Saveまで**行う。
+    割り当てたかはASC APIで確かめられる: そのApp IDのプロファイル（`GET /v1/bundleIds/{id}/profiles`の`profileContent`）の
+    `com.apple.security.application-groups`が**空配列なら未割り当て**。割り当てると既存プロファイルが`INVALID`に変わる
+- **`@Published`・`ObservableObject`を使うSwiftファイルには`import Combine`が要る**（#361）。プロジェクトが
+  `SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES`のため`import SwiftUI`経由では見えず、アーカイブが
+  `missing import of defining module 'Combine'`で落ちる。subpc・CIではSwiftをコンパイルできないので、`check-consistency.mjs`が検査する
 - 失敗時の動き: ログイン切れは内容を端末に残してログイン後に続きから取り込む／通信失敗はやり直しか破棄／上限超過・24時間超過は破棄して理由を表示
 
 ### 実機確認（TestFlightのビルドで）
