@@ -61,8 +61,10 @@ App Store Connect API キーは**新しく作らず**、他のiOSアプリと共
 2. **署名・アーカイブ・アップロード**（`xcode-27`ランナー）：APIキーによるクラウド署名（`-allowProvisioningUpdates`）。キーチェーンは使わない
 3. **ビルド処理待ち → 内部テストグループへ配布 → タグ`ios-testflight/<ビルド番号>`を打つ**（`ios/scripts/asc-api.mjs`）
 
-- ビルド番号は`run_number*100+run_attempt`。版番号は`package.json`の`version`をアーカイブ時に`MARKETING_VERSION`へ注入する
-  （pbxprojの値はリリースのバンプに追従しなくてよい）
+- ビルド番号は`run_number*100+run_attempt`。版番号はpbxprojの`MARKETING_VERSION`をそのまま使い、注入しない。
+  リリースのバンプが`package.json`の`version` lifecycleで`ios/scripts/sync-version.mjs`を走らせて揃える。
+  判定ジョブが`IOS_CHECK_VERSION=1 node ios/scripts/check-consistency.mjs`で`package.json`との一致を確かめ、ずれていれば配布を止める
+  （手で直すときは`node ios/scripts/sync-version.mjs`）
 - 認証情報はGitHubのsecret`ASC_KEY_ID`・`ASC_ISSUER_ID`・`ASC_KEY_P8`。値を変えたときだけ
   `scripts/sync-github-secrets.sh --only ASC_KEY_ID,ASC_ISSUER_ID,ASC_KEY_P8`で1Passwordから同期する。内部グループが複数あるときだけ
   repository variable`TESTFLIGHT_GROUP`にグループ名を入れる

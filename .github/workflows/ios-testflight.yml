@@ -53,6 +53,11 @@ jobs:
       - name: Fetch tags
         run: git fetch --tags --force origin
 
+      # 版番号は注入せず、pbxprojのMARKETING_VERSIONをそのまま使う（#341）。リリースのバンプが
+      # package.jsonのversion lifecycleでsync-version.mjsを走らせて揃えるので、ずれていれば配布を止める
+      - name: pbxprojの版番号とpackage.jsonの一致を確認
+        run: IOS_CHECK_VERSION=1 node ios/scripts/check-consistency.mjs
+
       - name: Decide
         id: decide
         run: |
@@ -129,8 +134,7 @@ jobs:
 
       - name: 署名・アーカイブ
         run: |
-          # 版番号はpackage.jsonのversionをここで注入する（pbxprojのMARKETING_VERSIONはリリースのバンプで
-          # 追従しないため、ずれていても配布は止めない。ios/README.md参照）
+          # 版番号(MARKETING_VERSION)は注入しない。pbxprojの値を使う（detectジョブでpackage.jsonとの一致を確認済み）
           # パイプの左（xcodebuild）の失敗を握り潰さない（既定の bash -e は pipefail なし）
           set -o pipefail
           xcodebuild archive \
@@ -141,7 +145,6 @@ jobs:
             -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_${ASC_KEY_ID}.p8" \
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            MARKETING_VERSION="$VERSION" \
             CURRENT_PROJECT_VERSION="$BUILD" \
             | tail -n 60
 
