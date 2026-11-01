@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   acceptsJson,
-  buildNewsMailPickPath,
+  buildArticleMailPath,
   buildSharePagePath,
   extractUrl,
   fallbackArticleTitle,
@@ -246,14 +246,9 @@ describe("buildSharePagePath / fallbackArticleTitle", () => {
   });
 });
 
-describe("buildNewsMailPickPath", () => {
-  const now = new Date("2026-09-17T03:00:00Z"); // JSTの木曜
-  it("記事の日付が入っている週を開く", () => {
-    assert.equal(buildNewsMailPickPath("a1", new Date("2026-09-16T00:00:00Z"), now), "/dashboard/news-mail?week=0&basis=either&triage=all&pick=a1");
-    assert.equal(buildNewsMailPickPath("a1", new Date("2026-09-08T00:00:00Z"), now), "/dashboard/news-mail?week=-1&basis=either&triage=all&pick=a1");
-  });
-  it("遡れる範囲より古ければ今週にする", () => {
-    assert.match(buildNewsMailPickPath("a1", new Date("2025-01-01T00:00:00Z"), now), /week=0&/);
+describe("buildArticleMailPath", () => {
+  it("記事詳細をメール送信シートを開いた状態で開く", () => {
+    assert.equal(buildArticleMailPath("a1"), "/dashboard/articles/a1?mail=1");
   });
 });
 

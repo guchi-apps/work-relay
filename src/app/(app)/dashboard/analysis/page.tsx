@@ -17,15 +17,15 @@ const COLLECTION_JOB_LIMIT = 5;
 export const dynamic = "force-dynamic";
 
 function ItemTitle({ item }: { item: QueueItem }) {
-  return item.article ? <Link className="q-title" href={`/dashboard/articles/${item.article.id}`}>{item.label}</Link> : <span className="q-title">{item.label}</span>;
+  return <Link className="q-title" href={`/dashboard/articles/${item.article.id}`}>{item.label}</Link>;
 }
 
 function ItemMeta({ item, businesses, children }: { item: QueueItem; businesses: BusinessDef[]; children?: React.ReactNode }) {
   return (
     <div className="q-meta">
-      {item.article ? <><span>記事</span><span>{relevanceLabel(businesses, item.article.business)}</span></> : <><span className="chip kind">週の総括</span><span>対象 {item.articleCount}件</span></>}
+      <span>記事</span><span>{relevanceLabel(businesses, item.article.business)}</span>
       {children}
-      {item.attempt !== null && item.attempt > 1 && <span>試行 {item.attempt}回目</span>}
+      {item.attempt > 1 && <span>試行 {item.attempt}回目</span>}
     </div>
   );
 }
@@ -79,11 +79,10 @@ export default async function AnalysisStatusPage() {
               <div><ItemTitle item={item} /><ItemMeta item={item} businesses={businesses}><span>積んだ時刻 {formatClock(item.queuedAt)}</span></ItemMeta></div>
               <div className="q-side">
                 {index === 0 && <span className="chip queued">次に解析</span>}
-                <span>{item.kind === "weekly_brief" && queued.some((other) => other.kind === "article") ? "記事のあとに実行" : `待ち ${formatDuration(now.getTime() - item.queuedAt.getTime())}`}</span>
+                <span>{`待ち ${formatDuration(now.getTime() - item.queuedAt.getTime())}`}</span>
               </div>
             </li>)}
           </ol>}
-          {queued.some((item) => item.kind === "weekly_brief") && <p className="q-hint">週の総括は時間がかかるため、待っている記事の解析が片付いてから実行されます。</p>}
         </section>
 
         <section className="q-panel">

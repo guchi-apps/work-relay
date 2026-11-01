@@ -138,7 +138,7 @@ export default function SharePanel({ businesses, url, text, defaultTitle, existi
             <div className="dot">✓</div>
             <div>
               <p>新着記事に追加しました</p>
-              <small>AI解析を待っています。終わると「ニュースを送る」に並びます</small>
+              <small>AI解析を待っています。解析前でも、登録時の要約でメールに送れます</small>
             </div>
           </div>
         ) : (
@@ -155,7 +155,7 @@ export default function SharePanel({ businesses, url, text, defaultTitle, existi
           {source}
         </div>
         <div className="share-actions">
-          <Link className="cta full big" href={saved.article.pickPath}>この記事だけ送る</Link>
+          <Link className="cta full big" href={saved.article.pickPath}>この記事をメールで送る</Link>
           <Link className="cta ghost full big" href={`/dashboard/articles/${saved.article.id}`}>記事の詳細を開く</Link>
         </div>
       </div>
@@ -185,7 +185,7 @@ export default function SharePanel({ businesses, url, text, defaultTitle, existi
       {error && <p className="helper" style={{ color: "#b8541c" }}>{error}</p>}
       <div className="share-actions">
         <button type="button" className="cta full big" disabled={!canSubmit} onClick={() => submit("add")}>{busy === "add" ? "追加中…" : "新着記事に追加する"}</button>
-        <button type="button" className="cta ghost full big" disabled={!canSubmit} onClick={() => submit("add_send")}>{busy === "add_send" ? "追加中…" : "追加して、この記事だけ送る"}</button>
+        <button type="button" className="cta ghost full big" disabled={!canSubmit} onClick={() => submit("add_send")}>{busy === "add_send" ? "追加中…" : "追加して、メールで送る"}</button>
       </div>
       {business === null && <p className="helper">事業を選ぶと追加できます。</p>}
     </div>

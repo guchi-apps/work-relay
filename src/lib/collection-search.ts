@@ -21,7 +21,7 @@ import { notifyNewCandidates } from "@/lib/aide-bot-notice";
  *
  * ChatGPT定期タスクとは**併用して品質を見比べる**前提のため、重複の除外や既登録記事の
  * 受け渡しはしていない（`buildCollectionSearchPrompt()`の注記）。テーブルを分けた理由は
- * `WeeklyBriefJob`と同じ。
+ * `ArticleAnalysisJob`と同じ。
  */
 
 // --- ジョブの投入 ---------------------------------------------------------------------
@@ -58,7 +58,7 @@ export type ClaimedCollectionSearchJob = {
 };
 
 /**
- * 期限切れのRUNNINGをQUEUEDへ戻す（総括の`releaseExpiredWeeklyBriefLeases()`と同じ扱い）。
+ * 期限切れのRUNNINGをQUEUEDへ戻す（記事解析の`releaseExpiredLeases()`と同じ扱い）。
  * `claimAnalysisJobs()`は取得の枠が残っていなくてもこれを呼ぶ。
  */
 export async function releaseExpiredCollectionSearchLeases(now: Date): Promise<void> {
@@ -127,7 +127,7 @@ async function finishFailed(jobId: string, status: "FAILED" | "AUTH_REQUIRED", n
 }
 
 /**
- * ポーラーからの収集結果を保存し、取り込む。総括の`reportWeeklyBriefResult()`と同じ流れ。
+ * ポーラーからの収集結果を保存し、取り込む。記事解析の`reportAnalysisResult()`と同じ流れ。
  *
  * **取り込んでからジョブを完了にする。** 取り込みの途中でプロセスが落ちても、ジョブは
  * `RUNNING`のまま残ってリース切れで積み直され、再取り込みはURL一致の冪等性で二重登録にならない。

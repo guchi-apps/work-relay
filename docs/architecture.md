@@ -184,7 +184,7 @@ DBに依存しない形（コードレビュー・curlでの入力検証確認�
 
 ダミーの`DATABASE_URL`のままでも`requireInternalApiKey()`・入力検証までは到達できるため、
 **バリデーションの単体的な挙動はcurlだけで確認できる**。Prismaを呼ぶ画面（`/dashboard`・
-`/dashboard/inbox`・`/dashboard/news-mail`）は`PrismaClientInitializationError`が`loading.tsx`のSuspense境界内で
+`/dashboard/inbox`）は`PrismaClientInitializationError`が`loading.tsx`のSuspense境界内で
 起きるため、**レスポンスは200のまま起動画面（`splash-shell`）で止まって見える**（ステータス
 コードだけでは気付けない）。
 
@@ -235,8 +235,7 @@ DBに依存しない形（コードレビュー・curlでの入力検証確認�
 戻し、#216でChatGPT定期タスクの週報仕様（JSTの日曜00:00〜土曜23:59を1週とする）に揃えるため
 再び日曜0時へ戻したもの。** #216ではカレンダーピッカー（後述）自体も日曜始まりの行へ変更しており、
 「画面のこの週に出ているのに週あたり上限は別の週の枠で数えられている」という#125が避けようとした
-食い違いは、表示・カレンダーの行・日次収集の対象期間・週あたり掲載上限・週報メールの既定週・
-週の総括AIジョブが共有する`getWeekRange()`を揃えることで今回も維持している。**どの日付項目を
+食い違いは、表示・カレンダーの行・日次収集の対象期間・週あたり掲載上限が共有する`getWeekRange()`を揃えることで今回も維持している。**どの日付項目を
 優先して週を判定するか（公開日→発生日→収集期間、後述）という#43の判断基準はこれと無関係で
 変えていない。** 週選択カレンダーピッカー自体は「業界ニュース画面（`/dashboard`）」の節を参照。
 
@@ -561,9 +560,9 @@ AIDE側がマージされるまでエンドツーエンドの送信は動かな�
   失われる）。トークンはスマホに置く値なので、AIDE・ポーラー用のシークレットとは分けている
 - 「画像を送る」は表示のたびに`GET /api/share/inbox`を一度呼ぶ。`?shared=`が無くても最新の1件を
   拾うのは、Safariでログインし直してから開いた場合にも写真を読み込むため
-- **記事（URL）は「ニュースを送る」へ直接は流し込めない。** あの画面は週単位でDBの記事を選ぶ画面で、
-  URLの入力欄が無い。共有された記事は`/dashboard/share`で新着記事へ登録し（`src/lib/shared-article.ts`）、
-  「この記事だけ送る」で`/dashboard/news-mail?pick=<記事ID>`を開く。登録は自動収集の週あたり上限・
+- **共有された記事（URL）は、いったん新着記事へ登録してからメールに送る。** `/dashboard/share`で
+  登録し（`src/lib/shared-article.ts`）、「メールで送る」で記事詳細を送信シートを開いた状態
+  （`/dashboard/articles/<記事ID>?mail=1`。`buildArticleMailPath()`）で開く（#385）。登録は自動収集の週あたり上限・
   同一イベント統合を通さず、人が選んだ記事として「採用」（`reviewedAt`あり）で置き、AI解析を積む。
   ページ本文は取得しない（解析は本文が無くても原典URLから判断する）
 - **文章だけの共有（URLを含まない）は、`/dashboard/share`から社用メールへ直接送れる（#149）。**
@@ -689,7 +688,7 @@ VPSへ移り、AIDEと同じく`127.0.0.1`からの呼び出しになったが�
 片方を失効させてももう片方が止まらないようにするため。どちらも未設定なら素通りではなく503
 （`src/lib/internal-auth.ts`）。未設定のあいだポーラーは待機したままで、ジョブは`queued`で残る。
 
-**`GET /api/internal/ai-usage`はops-dashboardの「アプリ別のAI利用」向け**（#243）。記事解析・週の総括・
+**`GET /api/internal/ai-usage`はops-dashboardの「アプリ別のAI利用」向け**（#243）。記事解析・
 ニュース収集のCodex CLI呼出回数を、直近24時間・7日間×モデル別に返す（`src/lib/ai-usage.ts`）。
 **成功したものだけ数える**（記事解析は`ArticleAnalysis.createdAt`、他2つは`COMPLETED`の`finishedAt`）。
 トークン数は持たないので返さない。`model`がnullの行は固定ID`codex`に置換する（ops-dashboardは
@@ -801,75 +800,44 @@ codex login status                              # 人が読む用。`Logged in u
 `src/lib/analysis-prompt.ts`へ分けてある。DBを伴う挙動（実際の重複投入・リース回収）は
 本番相当のDBが無いローカルでは確かめられないため、コードレビューでの突き合わせに留めている。
 
-## 業界ニュースを週報メールで送る（`/dashboard/news-mail`, #110）
+## 業界ニュースの記事を1件ずつ社用メールに送る（#385。元は週報メール #110）
 
-選んだ週の記事にチェックを付け、AIのまとめを添えて**1通の図解つきメール**を社用アドレスへ送る
-画面。送信経路は画像メール（#64）と同じで、Gmail送信・宛先/BCCの固定・二重送信の防止はAIDE側が
-担い、Research Desk側は「AIDEへ送信リクエストを送るところまで」を持つ。環境変数は
-`AIDE_NEWS_MAIL_URL`／`AIDE_NEWS_MAIL_TOKEN`（画像メールとは別のトークンにしてある。片方を
-失効させてももう片方が止まらないようにするため）。**AIDE側の受け口が入るまでエンドツーエンドの
-送信は動かない**（別Issueで切り出し済み）。
+気になった記事に「ひとこと」を添えて、**1通1記事**で社用アドレスへ送る。#110の週報メール
+（`/dashboard/news-mail`。週を選んで複数記事＋AIの週の総括を1通にまとめる）は#385で廃止し、
+画面・`/api/weekly-brief/jobs`・`WeeklyBriefJob`テーブル（マイグレーションで削除）・ポーラーへの
+総括ジョブの相乗りを撤去した。ポーラー本体（`scripts/codex-analysis-worker.mjs`）は読むのが
+`jobId`・`prompt`・`outputSchema`だけなので変更していない。
 
-### 週の対象は「公開日」だけで決めない
-
-業界ニュース画面（`/dashboard`）は公開日基準（`weekCondition()`）だが、週報メールでは
-**公開が前の週でも、その週に取得した記事**を送りたい。そのため画面に「対象の取り方」を置き、
-`src/lib/industry-information.ts`の`weekConditionByBasis()`で切り替える。
-
-| `?basis=` | 条件 |
-|---|---|
-| `published` | 従来どおり公開日→発生日→収集ランの重なり（`weekCondition()`） |
-| `collected` | `collectedAt`がその週（`collectedWeekCondition()`） |
-| `either` | 上の2つの和。**この画面の既定** |
-
-一覧・メール本文の「取得のみ」の札は`src/lib/news-mail.ts`の`isCollectedOnly()`が付ける。
-公開日（無ければ発生日）が週の外で収集日が週の中にある記事という**表示上の目印**で、
-DB側の絞り込み条件を厳密に写したものではない（どちらの日付も無い記事は元々収集日で週が
-決まるため「取得のみ」とは呼ばない）。既定の週は**先週**（`DEFAULT_WEEK_OFFSET = -1`）で、
-週明けに先週ぶんをまとめて送る使い方を前提にしている。
-
-### 本文はサーバーが組み立て、プレビューは同じ関数を呼ぶ
-
-`src/lib/news-mail.ts`はPrisma・Reactに触れない純粋なモジュールで、件名・HTML本文・テキスト本文を
-作る。**画面のプレビューと送信APIが同じ`buildNewsMailHtml()`を呼ぶ**ので、見えている内容と
-実際に送る内容が食い違わない。ブラウザから受け取るのは「どの記事を送るか」と件名だけで、
-本文のHTMLは受け取らない（任意のHTMLを送れる口を作らないため）。差し込む値はすべて
-`escapeHtml()`を通し、`href`は`https?:`で始まるURLだけを通す。
-
-HTMLは**tableとインラインスタイルだけ**で組む。Gmailは`<style>`の一部やflex/gridを落とすため。
-事業別の件数バーも画像ではなく幅を指定したtableのセルで描く——画像はGmailの初期表示で
-ブロックされることがあり、その場合に図が丸ごと読めなくなる。**`style`属性はダブルクォートで
-囲むので、`font-family`のフォント名はシングルクォートで書く**（ダブルのままだと属性がそこで
-閉じ、以降のHTMLが壊れる）。
-
-日付の整形と週の区切りは`src/lib/jst-week.ts`へ切り出した。週報メールの本文組み立てが
-**Prismaを読めない場所（`node --test`とブラウザ）**から同じ関数を使う必要があるため。
-`industry-information.ts`は従来と同じ名前で再エクスポートしているので、既存の呼び出し側は
-変わらない。**`pnpm test`から読むモジュールは`@/`エイリアスではなく相対パス＋拡張子で
-importする**（`@/`はtsconfigの`paths`で、Nodeの実行時解決には効かない）。
-
-### 週の総括（AI）は既存のポーラーに相乗りする
-
-「週の総括」は`WeeklyBriefJob`（`src/lib/weekly-brief.ts`）に積み、**記事解析（#79）と同じ
-VPS常駐ポーラー**（`scripts/codex-analysis-worker.mjs`）が実行する。ポーラーが読むのは
-`jobId`・`prompt`・`outputSchema`だけなので、`/api/internal/analysis/claim`の応答へ総括ジョブを
-混ぜ、`/report`をジョブIDで振り分けるだけで動く——**ポーラーのスクリプトは変更していない。**
-
-- **テーブルは`ArticleAnalysisJob`と分けた。** あちらの`articleId`はNOT NULLで記事側の
-  `analysisStatus`とも連動しており、nullableにして相乗りさせると記事解析側の前提（claim時の
-  状態更新・リース回収・二重実行防止）が広く崩れる
-- 二重実行の防止・リース回収の作りは記事解析と同じ（`activeKey`のUNIQUE、`leaseExpiresAt`）。
-  `activeKey`には**週の開始日時**を入れるので、同じ週の総括は同時に1本だけになる
-- **記事の解析を優先し、余った枠でだけ総括を取る**（`claimAnalysisJobs()`）。総括は1回あたり
-  数分かかるため、先に取ると仕分け待ちの記事解析が後回しになる
-- 結果は1ジョブ1件なので別テーブルを作らず同じ行に持つ（`headline`・`overview`・`topics`）
-- 画面は総括が`QUEUED`／`RUNNING`の間だけ30秒ごとに`router.refresh()`する。**総括が無くても
-  送信はできる**（その場合はメール本文からその節ごと落ちる）
+- **入口は`ArticleMailButton`（`src/components/ArticleMailButton.tsx`）の「✉ メールで送る」。**
+  業界ニュース・新着記事のカード（`ArticleAnalysisBlock`）と記事詳細にある。押すと送信シートが開き
+  （PCは右から、スマホ幅は下から）、ひとこと（任意・300文字まで）と件名の編集部分
+  （先頭の`[業界ニュース]`は固定）を入れて、プレビューを見て送る。共有した記事の登録後は
+  `?mail=1`付きの記事詳細へ遷移し、シートを開いた状態で始まる
+- **本文はサーバーが組み立て、プレビューは同じ関数を呼ぶ。** `src/lib/news-mail.ts`はPrisma・Reactに
+  触れない純粋なモジュールで、件名・HTML本文・テキスト本文を作る。**画面のプレビューと送信APIが
+  同じ`buildNewsMailHtml()`を呼ぶ**ので、見えている内容と実際に送る内容が食い違わない。
+  `POST /api/news-mail/send`が受け取るのは記事ID・件名・ひとこと・`idempotencyKey`だけで、
+  本文のHTMLは受け取らない（任意のHTMLを送れる口を作らないため）。記事はIDでDBを引き直す。
+  差し込む値はすべて`escapeHtml()`を通し、`href`は`https?:`で始まるURLだけを通す
+- **送信先はAIDEの`/api/news-mail/send`のまま。** 渡す項目（`subject`・`bodyText`・`bodyHtml`・
+  `articleCount`）は週報のときと同じで、`articleCount`は常に1。環境変数は`AIDE_NEWS_MAIL_URL`／
+  `AIDE_NEWS_MAIL_TOKEN`（画像メールとは別のトークン）。Gmail送信・宛先/BCCの固定・二重送信の防止は
+  AIDE側が担う。ブラウザからの認証はSupabaseのセッション
+- HTMLは**tableとインラインスタイルだけ**で組む。Gmailは`<style>`の一部やflex/gridを落とすため。
+  **`style`属性はダブルクォートで囲むので、`font-family`のフォント名はシングルクォートで書く**
+  （ダブルのままだと属性がそこで閉じ、以降のHTMLが壊れる）
+- 件名・ひとことは制御文字を落とす（`sanitizeSubjectBody()`・`sanitizeNote()`）。件名はAIDE側で
+  メールヘッダーに載るため、改行が残るとヘッダーを差し込める経路になり得る。ひとことは段落の
+  ために改行だけ残す
+- AI解析が終わっていない記事は、登録時の要約を載せて本文にその旨を添える（解析を待たずに送れる）
+- 日付の整形と週の区切りは`src/lib/jst-week.ts`にある。**`pnpm test`から読むモジュールは`@/`
+  エイリアスではなく相対パス＋拡張子でimportする**（`@/`はtsconfigの`paths`で、Nodeの実行時解決には
+  効かない）
 
 ## 業界ニュースの自動収集ジョブ（Codex CLI・Web検索、#189）
 
 これまでChatGPTの定期タスクが毎日20:00に直近7日分を検索・選定・要約し、AIDE経由で
-`POST /api/internal/weekly-report`へ登録していた。その作業を、記事解析（#79）・週の総括（#110）と
+`POST /api/internal/weekly-report`へ登録していた。その作業を、記事解析（#79）と
 **同じVPS常駐ポーラー**（`scripts/codex-analysis-worker.mjs`）へ移した。RSS収集（題名だけを拾う
 `runDailyCollection()`）は残しており、代替ではなく別経路。
 
@@ -888,10 +856,10 @@ VPSのポーラー → claim（kind: "collection_search"）→ codex exec ＋ We
   `CollectedArticle`）を`WeeklyReportArticle`に揃えてあるので、冪等性・統合・週あたり上限・
   `CollectionRun`への記録はAIDE経由の登録と同じ規則で働く。**取り込んでからジョブを完了にする**——
   途中で落ちてもリース切れで積み直され、再取り込みはURL一致で二重登録にならない
-- **`CollectionSearchJob`は`ArticleAnalysisJob`・`WeeklyBriefJob`と別テーブル**。理由は総括と同じ
+- **`CollectionSearchJob`は`ArticleAnalysisJob`と別テーブル**。理由は
   （記事解析のテーブルは`articleId`必須で記事側の`analysisStatus`と連動する）。`activeKey`にJSTの日付を
   入れ、同じ日の収集が待ち・実行中の間は積まない（UNIQUE制約。終了時にnullへ戻すので完了後の再実行は可）
-- **実行の優先順は 記事の解析 → 週の総括 → 収集**（`claimAnalysisJobs()`）。収集は定期実行で、
+- **実行の優先順は 記事の解析 → 収集**（`claimAnalysisJobs()`）。収集は定期実行で、
   人が結果を待っていないため、余った枠でだけ取る。期限切れの回収は枠に関わらず毎回行う
 - **ポーラーはジョブごとの実行上限を読む**。claimの応答の`timeoutSeconds`（収集は780秒）があれば
   それに従い、無ければ`ANALYSIS_JOB_TIMEOUT_SECONDS`（既定600秒）。**保持期限（`LEASE_SECONDS`＝900秒）
@@ -954,16 +922,11 @@ VPSのポーラー → claim（kind: "collection_search"）→ codex exec ＋ We
 実行環境・今日の実績に分けて出し、`AutoRefresh`（`router.refresh()`）で15秒ごとに読み直す。
 タブが裏にある間は読み直さない。
 
-- **待ちの並びはポーラーが実際に取る順にする**（`orderQueue()`、`src/lib/analysis-queue-view.ts`）。
-  `claimAnalysisJobs()`は記事を古い順に取り、余った枠でだけ週の総括（`WeeklyBriefJob`）を取るため、
-  積んだ時刻が早い総括でも、待っている記事の後ろへ回す。積んだ時刻の順に混ぜて並べると、
-  1番上の総括がいつまでも始まらないように見える
+- **待ちの並びはポーラーが実際に取る順（積んだ時刻の古い順）にする**（`orderQueue()`、
+  `src/lib/analysis-queue-view.ts`）。
 - **「要対応」と帯の「失敗」「認証待ち」は、記事の最新状態（`IndustryInformation.analysisStatus`）で
   数える。** #137より前の帯は`ArticleAnalysisJob`の`FAILED`の件数を数えていたため、再解析で直った
   記事の過去の失敗まで積み上がり続けていた
-- **帯の「待ち」「実行中」は週の総括も含めて数える**（`briefQueued`・`briefRunning`を合算）。
-  `AnalysisOverview`の`queued`・`running`自体は記事の解析だけのまま残している——週報メール画面
-  （`NewsMailPanel`の`analysisQueue`）が「総括より先に走る記事の数」として使っているため
 - **期限切れの「解析中」はポーラー停止のサイン。** 期限切れのジョブを待ちへ戻す
   `releaseExpiredLeases()`はポーラーの取得の中でしか呼ばれないため、期限を過ぎても`RUNNING`の
   ままなのはポーラーが取りに来ていないときだけ。画面では「期限切れ（ポーラー停止の可能性）」と出す
@@ -1071,5 +1034,5 @@ iPhoneの共有シートに「workRelay」を出し、写真（最大20枚）・
 - 区分を足すには`industry_business`へ行を足す（検索クエリ・対象範囲・判定基準もその行に入る）。
   色は`teal`/`orange`/`violet`のいずれか（CSSは`globals.css`）
 - 旧`DELIVERY`はマイグレーションで`EXTERIOR`へ移した。AIDE（`/api/internal/weekly-report`）と
-  iOS共有（`/api/articles/shared`）が送る旧値は`normalizeBusinessKey()`が`EXTERIOR`に読み替える
+  iOS共有（`/api/articles/shared`）が`EXTERIOR`を送るようになったため、旧値の読み替えは外した（#364）。旧`DELIVERY`・`?business=delivery`は不正値として扱う
 - 収集ジョブの出力は区分名をキーにできないため、次回の判定基準は`nextPolicies: [{business, policy}]`の配列で受ける

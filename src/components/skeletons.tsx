@@ -113,27 +113,6 @@ export function ImageMailSkeleton() {
   );
 }
 
-// 週報メール（#110）。週送り・対象の取り方・一覧・送信カードの並びに形を寄せる。
-export function NewsMailSkeleton() {
-  return (
-    <section className="content">
-      <HeaderSkeleton breadcrumb ctaWidth={100} />
-      <Bar width="100%" height={38} className="sk-weeknav" />
-      <Bar width="100%" height={56} className="sk-weeknav" />
-      <div className="sk-filters">
-        <Bar width={110} height={35} />
-        <Bar width={110} height={35} />
-        <Bar width={110} height={35} />
-        <Bar width="100%" height={35} />
-      </div>
-      <Bar width="100%" height={44} className="sk-weeknav" />
-      <NewsCardSkeleton />
-      <NewsCardSkeleton lines={1} />
-      <Bar width="100%" height={180} className="sk-keypoints" />
-    </section>
-  );
-}
-
 export function SettingsSkeleton() {
   return (
     <section className="content">

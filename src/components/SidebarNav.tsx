@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 const workspaceLinks = [
   { href: "/dashboard", label: "▦　業界ニュース" },
   { href: "/dashboard/inbox", label: "📥　新着記事" },
-  { href: "/dashboard/news-mail", label: "✉　ニュースを送る" },
   { href: "/dashboard/image-mail", label: "📷　画像を送る" },
 ];
 

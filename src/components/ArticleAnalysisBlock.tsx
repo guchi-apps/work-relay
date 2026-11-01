@@ -1,7 +1,9 @@
 import ArticleAnalysisActions from "@/components/ArticleAnalysisActions";
+import ArticleMailButton from "@/components/ArticleMailButton";
 import { ANALYSIS_STATUS_CLASS, ANALYSIS_STATUS_LABELS, FAILURE_KIND_LABELS, formatConfidence, relevanceLabel } from "@/lib/analysis-display";
 import type { BusinessDef } from "@/lib/business-defs";
 import { formatDateTime, type IndustryInformationListItem } from "@/lib/industry-information";
+import { toNewsMailArticleDto } from "@/lib/news-mail-articles";
 import { getTriageState, TRIAGE_CLASS, TRIAGE_LABELS } from "@/lib/triage";
 
 /**
@@ -36,6 +38,7 @@ export default function ArticleAnalysisBlock({ item, businesses }: { item: Indus
         {analysis && <span className={`by ${reviewed ? "human" : "ai"}`}>{reviewed ? "人が確定" : "AI判定"}</span>}
         <span className={`chip ${TRIAGE_CLASS[triage]}`}>{TRIAGE_LABELS[triage]}</span>
         <ArticleAnalysisActions articleId={item.id} status={status} triage={triage} />
+        <ArticleMailButton article={toNewsMailArticleDto(item)} businesses={businesses} />
       </div>
       {analysis && <p className="ai-reason">判定理由: {analysis.relevance === "OUT_OF_SCOPE" ? (analysis.noiseReason ?? analysis.reason) : analysis.reason}</p>}
       {job && (status === "FAILED" || status === "AUTH_REQUIRED") && (

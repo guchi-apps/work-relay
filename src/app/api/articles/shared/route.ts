@@ -3,7 +3,7 @@ import { normalizeUrl } from "@/lib/collection";
 import { getBusinesses, normalizeBusinessKey } from "@/lib/businesses";
 import { fitsNormalizedUrlColumn } from "@/lib/collection-rules";
 import { json } from "@/lib/internal-auth";
-import { buildNewsMailPickPath, isHttpUrl, SHARE_TITLE_MAX_LENGTH } from "@/lib/share-inbox";
+import { buildArticleMailPath, isHttpUrl, SHARE_TITLE_MAX_LENGTH } from "@/lib/share-inbox";
 import { createSharedArticle, type SharedArticleBusiness } from "@/lib/shared-article";
 
 export const runtime = "nodejs";
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
       ok: true,
       outcome: result.outcome,
       article: { id: article.id, title: article.title, sourceName: article.sourceName, collectedAt: article.collectedAt.toISOString(), analysisStatus: article.analysisStatus, triage: article.triage },
-      pickPath: buildNewsMailPickPath(article.id, article.publishedAt ?? article.collectedAt, new Date()),
+      pickPath: buildArticleMailPath(article.id),
     },
     result.outcome === "created" ? 201 : 200,
   );
