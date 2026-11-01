@@ -11,7 +11,10 @@ const WINDOW_MS = 60_000;
 const MAX_REQUESTS = 20;
 const rateLimit = new Map<string, { startedAt: number; count: number }>();
 
-const ARTICLE_LIMIT = 15;
+// 全体の上限はAIDEのMCP中継（`MAX_ARTICLES`・input schemaの`maxItems`）と同じ10件に揃える。ここだけ
+// 先に広げると、AIDEが11件以上を拒否して通常経路では使えない（#369→#379）。広げるときはAIDE側を
+// 先に配布し、実稼働のschemaを確かめてからここを上げる。
+const ARTICLE_LIMIT = 10;
 const ARTICLE_LIMIT_PER_BUSINESS = 5;
 // AIDE側（30項目・JSONにして2000文字まで）と同等の上限で受ける（#47）。
 const EXTRACTED_METRICS_MAX_KEYS = 30;
