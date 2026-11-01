@@ -43,7 +43,6 @@ function validateInput(value: unknown, businesses: BusinessDef[]): WeeklyReportI
   for (const [index, article] of input.articles.entries()) {
     if (!article || typeof article !== "object") throw new Error(`articles[${index}]が不正です`);
     const item = article as Record<string, unknown>;
-    // 旧区分値DELIVERYはEXTERIORとして受け付ける（AIDE側の更新までの互換）。
     const business = normalizeBusinessKey(businesses, item.business);
     if (!business) throw new Error(`articles[${index}].businessは${businessKeys(businesses).join("・")}のいずれかで指定してください`);
     item.business = business;

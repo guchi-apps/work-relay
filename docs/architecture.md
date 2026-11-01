@@ -1071,5 +1071,5 @@ iPhoneの共有シートに「workRelay」を出し、写真（最大20枚）・
 - 区分を足すには`industry_business`へ行を足す（検索クエリ・対象範囲・判定基準もその行に入る）。
   色は`teal`/`orange`/`violet`のいずれか（CSSは`globals.css`）
 - 旧`DELIVERY`はマイグレーションで`EXTERIOR`へ移した。AIDE（`/api/internal/weekly-report`）と
-  iOS共有（`/api/articles/shared`）が送る旧値は`normalizeBusinessKey()`が`EXTERIOR`に読み替える
+  iOS共有（`/api/articles/shared`）が`EXTERIOR`を送るようになったため、旧値の読み替えは外した（#364）。旧`DELIVERY`・`?business=delivery`は不正値として扱う
 - 収集ジョブの出力は区分名をキーにできないため、次回の判定基準は`nextPolicies: [{business, policy}]`の配列で受ける

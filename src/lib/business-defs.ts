@@ -73,9 +73,6 @@ export const DEFAULT_BUSINESSES: BusinessDef[] = [
   },
 ];
 
-/** 旧区分値。外部（AIDE・iOS共有）が送ってくる値を当面は受け付けるための読み替え。 */
-const LEGACY_KEYS: Record<string, BusinessKey> = { DELIVERY: "EXTERIOR" };
-
 export function businessKeys(defs: readonly BusinessDef[]): BusinessKey[] {
   return [...defs].sort((a, b) => a.sortOrder - b.sortOrder).map((def) => def.key);
 }
@@ -88,11 +85,10 @@ export function findBusiness(defs: readonly BusinessDef[], key: string): Busines
   return defs.find((def) => def.key === key);
 }
 
-/** 区分値を検証する。旧`DELIVERY`は`EXTERIOR`に読み替える。未知の値は`null`。 */
+/** 区分値を検証する。未知の値（旧`DELIVERY`を含む）は`null`。 */
 export function normalizeBusinessKey(defs: readonly BusinessDef[], value: unknown): BusinessKey | null {
   if (typeof value !== "string") return null;
-  const key = LEGACY_KEYS[value] ?? value;
-  return defs.some((def) => def.key === key) ? key : null;
+  return defs.some((def) => def.key === value) ? value : null;
 }
 
 export function businessLabel(defs: readonly BusinessDef[], key: string): string {
@@ -113,7 +109,7 @@ export function zeroCounts(defs: readonly BusinessDef[]): Record<BusinessKey, nu
   return Object.fromEntries(defs.map((def) => [def.key, 0]));
 }
 
-/** `?business=`の値を検証する。`all`か区分の小文字キー（旧`delivery`は`exterior`）。それ以外は`all`。 */
+/** `?business=`の値を検証する。`all`か区分の小文字キー。それ以外（旧`delivery`を含む）は`all`。 */
 export function parseBusinessParam(defs: readonly BusinessDef[], value: string | string[] | undefined): string {
   if (typeof value !== "string") return "all";
   const key = normalizeBusinessKey(defs, value.toUpperCase());

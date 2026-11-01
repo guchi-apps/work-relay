@@ -8,16 +8,16 @@ describe("事業区分の定義", () => {
     assert.equal(businessLabel(DEFAULT_BUSINESSES, "AI"), "AI関連");
   });
 
-  it("旧DELIVERYはEXTERIORに読み替え、未知の値は弾く", () => {
-    assert.equal(normalizeBusinessKey(DEFAULT_BUSINESSES, "DELIVERY"), "EXTERIOR");
+  it("未知の値は弾く（旧DELIVERYの読み替えは外した）", () => {
+    assert.equal(normalizeBusinessKey(DEFAULT_BUSINESSES, "DELIVERY"), null);
     assert.equal(normalizeBusinessKey(DEFAULT_BUSINESSES, "AI"), "AI");
     assert.equal(normalizeBusinessKey(DEFAULT_BUSINESSES, "OTHER"), null);
     assert.equal(normalizeBusinessKey(DEFAULT_BUSINESSES, 1), null);
   });
 
-  it("?business=は小文字キーを受け、旧delivery・未知の値を丸める", () => {
+  it("?business=は小文字キーを受け、旧delivery・未知の値は`all`に丸める", () => {
     assert.equal(parseBusinessParam(DEFAULT_BUSINESSES, "ai"), "ai");
-    assert.equal(parseBusinessParam(DEFAULT_BUSINESSES, "delivery"), "exterior");
+    assert.equal(parseBusinessParam(DEFAULT_BUSINESSES, "delivery"), "all");
     assert.equal(parseBusinessParam(DEFAULT_BUSINESSES, "unknown"), "all");
     assert.equal(parseBusinessParam(DEFAULT_BUSINESSES, undefined), "all");
   });
