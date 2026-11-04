@@ -43,7 +43,7 @@ function Card({ item, latestRunId, businesses }: { item: IndustryInformationList
     </div>
     <p className="summary">{item.summary ?? "要約は登録されていません。"}</p>
     <dl className="details"><div><dt>主な数値・事実</dt><dd>{formatMetrics(item.extractedMetrics) ?? "—"}</dd></div><div><dt>企画・設計への示唆</dt><dd>{item.implications ?? "—"}</dd></div><div><dt>キーワード</dt><dd>{keywords.length ? keywords.join("／") : "—"}</dd></div></dl>
-    <ArticleAnalysisBlock item={item} businesses={businesses} />
+    <ArticleAnalysisBlock item={item} businesses={businesses} hideActionsWhenAdopted />
     <div className="news-foot"><div className="tags">{item.targetCompany && <b>{item.targetCompany}</b>}{item.targetProduct && <span>{item.targetProduct}</span>}{tags.map((tag) => <span key={tag}>{tag}</span>)}</div><a href={item.originalUrl} target="_blank" rel="noreferrer">元記事 ↗</a></div>
     {mergedSources.length > 0 && <details className="merge-info">
       <summary>更新履歴を見る</summary>

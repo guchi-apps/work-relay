@@ -13,7 +13,16 @@ import { getTriageState, TRIAGE_CLASS, TRIAGE_LABELS } from "@/lib/triage";
  * 判定理由を出す。人が確定済みの記事は「人が確定」と表示し、AIの判定と区別できるようにする。
  * 仕分けの状態（未判定／採用／不採用、#94）の札もここに出す。
  */
-export default function ArticleAnalysisBlock({ item, businesses }: { item: IndustryInformationListItem; businesses: BusinessDef[] }) {
+export default function ArticleAnalysisBlock({
+  item,
+  businesses,
+  hideActionsWhenAdopted = false,
+}: {
+  item: IndustryInformationListItem;
+  businesses: BusinessDef[];
+  /** 採用済みの記事で再解析・採用／不採用ボタンを隠す（#395）。仕分け画面（新着記事）では使わない。 */
+  hideActionsWhenAdopted?: boolean;
+}) {
   const job = item.analysisJobs[0] ?? null;
   const analysis = item.analyses[0] ?? null;
   const status = item.analysisStatus;
@@ -37,7 +46,7 @@ export default function ArticleAnalysisBlock({ item, businesses }: { item: Indus
         {analysis && <span className="conf">信頼度 {formatConfidence(analysis.confidence)}</span>}
         {analysis && <span className={`by ${reviewed ? "human" : "ai"}`}>{reviewed ? "人が確定" : "AI判定"}</span>}
         <span className={`chip ${TRIAGE_CLASS[triage]}`}>{TRIAGE_LABELS[triage]}</span>
-        <ArticleAnalysisActions articleId={item.id} status={status} triage={triage} />
+        <ArticleAnalysisActions articleId={item.id} status={status} triage={triage} hideActions={hideActionsWhenAdopted && triage === "adopted"} />
         <ArticleMailButton article={toNewsMailArticleDto(item)} businesses={businesses} />
       </div>
       {analysis && <p className="ai-reason">判定理由: {analysis.relevance === "OUT_OF_SCOPE" ? (analysis.noiseReason ?? analysis.reason) : analysis.reason}</p>}
