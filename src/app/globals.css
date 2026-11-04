@@ -147,6 +147,7 @@ a.codex-strip{text-decoration:none;transition:background .15s}a.codex-strip:hove
 .q-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap}.q-head h2{font-size:14px;margin:0;display:flex;align-items:center;gap:8px}.q-head small{font-size:11px;color:var(--muted)}
 .q-count{font-size:11px;font-weight:700;background:var(--teal-pale);color:var(--teal);padding:1px 8px;border-radius:99px;font-variant-numeric:tabular-nums}.q-count.warn{background:#fdece0;color:#b8541c}
 .chip.kind{background:#eef0f6;color:#46557a}
+.chip.lang{background:#eaf0fb;color:#3a5a92;margin-right:6px;vertical-align:2px}.summary-note{margin:4px 0 0;font-size:11px;color:#b8541c}
 .q-rows{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
 .q-row{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:4px 12px;align-items:center;padding:11px 0;border-top:1px solid #edf1ef}.q-row:first-child{border-top:0}
 .q-mark{justify-self:center;padding:3px 6px}
