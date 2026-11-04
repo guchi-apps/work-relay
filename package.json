@@ -1,6 +1,6 @@
 {
   "name": "research-desk",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "packageManager": "pnpm@10.34.5",
   "scripts": {
@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test 'src/**/*.test.ts'",
+    "test": "node --test 'src/**/*.test.ts' 'ios/scripts/*.test.mjs'",
     "typecheck": "next typegen && tsc --noEmit",
     "build:ci": "prisma generate && next build",
     "postinstall": "prisma generate",

@@ -39,6 +39,10 @@ function article(overrides: Record<string, unknown> = {}): Record<string, unknow
 }
 
 describe("buildCollectionSearchPrompt", () => {
+  it("外国語の記事でも要約を日本語で書かせる（#394）", () => {
+    assert.ok(buildCollectionSearchPrompt(NOW).includes("必ず日本語で書きます"));
+  });
+
   it("今日の日付・対象期間・件数の上限・事業の観点を含める", () => {
     const prompt = buildCollectionSearchPrompt(NOW);
     assert.ok(prompt.includes("2026-09-21"), "今日");
