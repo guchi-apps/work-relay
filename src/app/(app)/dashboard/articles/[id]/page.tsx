@@ -41,6 +41,10 @@ export default async function ArticleDetailPage({ params, searchParams }: { para
   const duplicates = toDuplicates(analysis?.duplicates ?? null);
   const relatedFindings = toRelatedFindings(analysis?.relatedFindings ?? null);
   // 確定欄の初期値は「いまの実効値」。週報候補から外れている記事は対象外として開く。
+  // 人が採用・不採用を決めた記事は、操作ボタンを上に置かず「人による確定」の上側（右列）へ移す。
+  const triage = getTriageState(article);
+  const decided = triage === "adopted" || triage === "rejected";
+  const actions = <ArticleAnalysisActions articleId={article.id} status={status} triage={triage} showDetailLink={false} />;
   const currentRelevance = article.weeklyCandidate ? article.business : "OUT_OF_SCOPE";
 
   return <section className="content">
@@ -70,7 +74,7 @@ export default async function ArticleDetailPage({ params, searchParams }: { para
             <span className={`chip ${status ? ANALYSIS_STATUS_CLASS[status] : "queued"}`}>{status ? ANALYSIS_STATUS_LABELS[status] : "未解析"}</span>
           </div>
 
-          <ArticleAnalysisActions articleId={article.id} status={status} triage={getTriageState(article)} showDetailLink={false} />
+          {!decided && actions}
 
           {job && (status === "FAILED" || status === "AUTH_REQUIRED") && <p className={`ai-hint ${status === "FAILED" ? "fail" : ""}`}>
             {job.failureKind ? FAILURE_KIND_LABELS[job.failureKind] : "解析に失敗しました"}
@@ -151,8 +155,9 @@ export default async function ArticleDetailPage({ params, searchParams }: { para
       </div>
 
       <aside className="detail-side">
-        <section className="side-panel">
-          <h2>人による確定</h2>
+        {decided && <section className="side-panel">{actions}</section>}
+        <details className="side-panel accordion">
+          <summary><h2>人による確定</h2></summary>
           <AnalysisReviewForm articleId={article.id} businesses={businesses} relevance={currentRelevance} importance={article.importance} weeklyCandidate={article.weeklyCandidate} note={article.reviewNote} />
           {reviewed && <div className="diff">
             <p><b>人が確定した内容</b></p>
@@ -161,16 +166,16 @@ export default async function ArticleDetailPage({ params, searchParams }: { para
             仕分け　{article.weeklyCandidate ? "採用（週報の候補に含める）" : "不採用"}<br />
             {article.reviewedBy ?? "不明"} · {article.reviewedAt ? formatDateTime(article.reviewedAt) : ""}
           </div>}
-        </section>
+        </details>
 
-        <section className="side-panel">
-          <h2>実行環境</h2>
+        <details className="side-panel accordion">
+          <summary><h2>実行環境</h2></summary>
           <dl className="kv narrow">
             <dt>実行役</dt><dd>{overview.worker ? `${overview.worker.host} の Codex CLI` : "未接続"}</dd>
             <dt>認証方式</dt><dd>{overview.worker?.codexAuthMode === "chatgpt" ? "ChatGPTアカウント" : (overview.worker?.codexAuthMode ?? "不明")}<br /><span className="conf">APIキー認証は使いません</span></dd>
             <dt>最終応答</dt><dd>{overview.worker ? formatElapsed(overview.worker.lastSeenAt) : "—"}</dd>
           </dl>
-        </section>
+        </details>
       </aside>
     </div>
   </section>;
