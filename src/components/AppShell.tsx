@@ -8,6 +8,7 @@ import SidebarNav from "@/components/SidebarNav";
 import { DIRECTION_LOCK_PX, EDGE_ZONE_PX, SWIPE_DIRECTION_RATIO, SWIPE_MIN_DISTANCE_PX, WIDE_EDGE_ZONE_PX } from "@/lib/nav-swipe";
 
 const IMAGE_MAIL_PATH = "/dashboard/image-mail";
+const MEMO_PATH = "/dashboard/memo";
 const SETTINGS_PATH = "/settings";
 // SwipeWeekNavがマウントされ、週送りスワイプと境界幅を取り合う唯一の画面（src/app/(app)/dashboard/page.tsx）。
 const DASHBOARD_PATH = "/dashboard";
@@ -136,6 +137,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <BrandLogo tone="light" className="mobile-brand" />
         <span className="mobile-bar-spacer" />
         {pathname !== IMAGE_MAIL_PATH && <Link className="icon-btn" href={IMAGE_MAIL_PATH} aria-label="画像を社用メールに送る" onClick={() => setOpen(false)}>📷</Link>}
+        {pathname !== MEMO_PATH && <Link className="icon-btn" href={MEMO_PATH} aria-label="メモを社用メールに送る" onClick={() => setOpen(false)}>📝</Link>}
         {pathname !== SETTINGS_PATH && <Link className="icon-btn" href={SETTINGS_PATH} aria-label="設定" onClick={() => setOpen(false)}>⚙</Link>}
       </div>
       <aside className="sidebar" onClick={closeIfLinkClicked}>

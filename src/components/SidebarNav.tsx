@@ -7,6 +7,7 @@ const workspaceLinks = [
   { href: "/dashboard", label: "▦　業界ニュース" },
   { href: "/dashboard/inbox", label: "📥　新着記事" },
   { href: "/dashboard/image-mail", label: "📷　画像を送る" },
+  { href: "/dashboard/memo", label: "📝　メモを送る" },
 ];
 
 export default function SidebarNav() {
