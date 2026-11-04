@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import ArticleAnalysisBlock from "@/components/ArticleAnalysisBlock";
+import { ForeignTitleBadge, UntranslatedSummaryNote } from "@/components/ArticleLanguageMarks";
 import HeaderUserMenu from "@/components/HeaderUserMenu";
 import TriageInbox from "@/components/TriageInbox";
 import { getCurrentUser } from "@/lib/auth";
 import { businessLabel, getBusinesses, type BusinessDef } from "@/lib/businesses";
-import { isForeignLanguageTitle, isSummaryUntranslated } from "@/lib/article-language";
 import { countTriage, formatDate, getRecencyLabel, listRecentIndustryInformation, toStringArray, type IndustryInformationListItem, type RecencyLabel } from "@/lib/industry-information";
 import { getTriageState, parseTriageParam, TRIAGE_PARAMS, type TriageParam } from "@/lib/triage";
 
@@ -41,15 +41,14 @@ function RecentCard({ item, businesses }: { item: IndustryInformationListItem; b
   const tags = toStringArray(item.tags);
   const color = businesses.find((def) => def.key === item.business)?.color ?? "teal";
   const state = getTriageState(item);
-  const foreign = isForeignLanguageTitle(item.title);
   const hidden = state === "rejected" || state === "ai_rejected";
   return <article className={`news-card triage ${hidden ? "out-of-scope" : ""}`}>
     <label className="pick"><input type="checkbox" name="ids" value={item.id} aria-label={`「${item.title}」を選択`} /></label>
     <div className="card-body">
       <div className="biz"><i className={color === "teal" ? "" : color} />{businessLabel(businesses, item.business)}</div>
-      <div className="news-head"><div><h3>{foreign && <span className="chip lang">英語</span>}{item.title}</h3><p className="meta">{formatDate(item.publishedAt ?? item.occurredAt ?? item.collectedAt)}　·　{item.sourceName}　·　{item.isPrimarySource ? "一次情報" : "関連記事"}</p></div><span className={`badge ${item.importance === "HIGH" ? "high" : ""}`}>重要度 {importanceLabels[item.importance]}</span></div>
+      <div className="news-head"><div><h3><ForeignTitleBadge title={item.title} />{item.title}</h3><p className="meta">{formatDate(item.publishedAt ?? item.occurredAt ?? item.collectedAt)}　·　{item.sourceName}　·　{item.isPrimarySource ? "一次情報" : "関連記事"}</p></div><span className={`badge ${item.importance === "HIGH" ? "high" : ""}`}>重要度 {importanceLabels[item.importance]}</span></div>
       <p className="summary">{item.summary ?? "要約は登録されていません。"}</p>
-      {isSummaryUntranslated(item.summary) && <p className="summary-note">要約が日本語になっていません。内容は「元記事」で確認してください。</p>}
+      <UntranslatedSummaryNote summary={item.summary} />
       <ArticleAnalysisBlock item={item} businesses={businesses} />
       <div className="news-foot"><div className="tags">{item.targetCompany && <b>{item.targetCompany}</b>}{tags.map((tag) => <span key={tag}>{tag}</span>)}</div><a href={item.originalUrl} target="_blank" rel="noreferrer">元記事 ↗</a></div>
     </div>

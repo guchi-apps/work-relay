@@ -918,8 +918,8 @@ VPSのポーラー → claim（kind: "collection_search"）→ codex exec ＋ We
 
 収集ジョブのプロンプト（`src/lib/collection-search-prompt.ts`）は、記事が外国語でも`summary`を必ず日本語で書かせ、
 冒頭1文で「誰が何を発表した記事か」を示させる。題名は原文のまま保存し、日本語訳の列は持たない
-（`titleJa`のような列を足すとマイグレーションが要るため見送った）。新着記事画面（`/dashboard/inbox`）は
-`src/lib/article-language.ts`の簡易判定（ひらがな・カタカナ・漢字を含むか）で、題名が外国語の記事に
+（`titleJa`のような列を足すとマイグレーションが要るため見送った）。新着記事画面（`/dashboard/inbox`）と業界ニュース画面（`/dashboard`）は
+`src/lib/article-language.ts`の簡易判定（ひらがな・カタカナ・漢字が文字に占める割合が2割未満か）で、題名が外国語の記事に
 「英語」バッジを、要約が日本語を含まない記事に注意書きを出す。既存記事の要約は書き換えない。
 
 ## 解析状況画面（`/dashboard/analysis`, #137）
