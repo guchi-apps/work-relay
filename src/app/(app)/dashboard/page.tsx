@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import AnalysisStatusStrip from "@/components/AnalysisStatusStrip";
 import ArticleAnalysisBlock from "@/components/ArticleAnalysisBlock";
+import { ForeignTitleBadge, UntranslatedSummaryNote } from "@/components/ArticleLanguageMarks";
 import HeaderUserMenu from "@/components/HeaderUserMenu";
 import { getCurrentUser } from "@/lib/auth";
 import { businessParam, getBusinesses, parseBusinessParam, sortBusinesses, type BusinessDef } from "@/lib/businesses";
@@ -35,13 +36,14 @@ function Card({ item, latestRunId, businesses }: { item: IndustryInformationList
   const mergedSources = toMergedSources(item.mergedSources);
   return <article className={`news-card ${supplement ? "supplement" : ""} ${item.weeklyCandidate ? "" : "out-of-scope"}`}>
     <div className="news-head">
-      <div><h3>{item.title}</h3><p className="meta">{formatDate(item.publishedAt ?? item.occurredAt ?? item.collectedAt)}　·　{item.sourceName}　·　{item.isPrimarySource ? "一次情報" : "関連記事"}</p></div>
+      <div><h3><ForeignTitleBadge title={item.title} />{item.title}</h3><p className="meta">{formatDate(item.publishedAt ?? item.occurredAt ?? item.collectedAt)}　·　{item.sourceName}　·　{item.isPrimarySource ? "一次情報" : "関連記事"}</p></div>
       <div className="badge-col">
         {status && <span className={`status-pill ${status}`}>{status === "new" ? "NEW" : "更新"}</span>}
         <span className={`badge ${item.importance === "HIGH" ? "high" : ""}`}>{supplement ? "30日以内" : `重要度 ${importanceLabels[item.importance]}`}</span>
       </div>
     </div>
     <p className="summary">{item.summary ?? "要約は登録されていません。"}</p>
+    <UntranslatedSummaryNote summary={item.summary} />
     <dl className="details"><div><dt>主な数値・事実</dt><dd>{formatMetrics(item.extractedMetrics) ?? "—"}</dd></div><div><dt>企画・設計への示唆</dt><dd>{item.implications ?? "—"}</dd></div><div><dt>キーワード</dt><dd>{keywords.length ? keywords.join("／") : "—"}</dd></div></dl>
     <ArticleAnalysisBlock item={item} businesses={businesses} hideActionsWhenAdopted />
     <div className="news-foot"><div className="tags">{item.targetCompany && <b>{item.targetCompany}</b>}{item.targetProduct && <span>{item.targetProduct}</span>}{tags.map((tag) => <span key={tag}>{tag}</span>)}</div><a href={item.originalUrl} target="_blank" rel="noreferrer">元記事 ↗</a></div>
