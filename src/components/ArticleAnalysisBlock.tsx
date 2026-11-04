@@ -37,7 +37,7 @@ export default function ArticleAnalysisBlock({ item, businesses }: { item: Indus
         {analysis && <span className="conf">信頼度 {formatConfidence(analysis.confidence)}</span>}
         {analysis && <span className={`by ${reviewed ? "human" : "ai"}`}>{reviewed ? "人が確定" : "AI判定"}</span>}
         <span className={`chip ${TRIAGE_CLASS[triage]}`}>{TRIAGE_LABELS[triage]}</span>
-        <ArticleAnalysisActions articleId={item.id} status={status} triage={triage} />
+        <ArticleAnalysisActions articleId={item.id} status={status} triage={triage} hideActions={triage === "adopted"} />
         <ArticleMailButton article={toNewsMailArticleDto(item)} businesses={businesses} />
       </div>
       {analysis && <p className="ai-reason">判定理由: {analysis.relevance === "OUT_OF_SCOPE" ? (analysis.noiseReason ?? analysis.reason) : analysis.reason}</p>}

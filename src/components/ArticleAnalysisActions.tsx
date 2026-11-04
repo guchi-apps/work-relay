@@ -14,6 +14,8 @@ type Props = {
   triage: TriageState;
   /** 記事詳細画面では「詳細を見る」を出さない。 */
   showDetailLink?: boolean;
+  /** 採用済みの一覧カードでは再解析・採用／不採用のボタンを出さない（#395）。 */
+  hideActions?: boolean;
 };
 
 /**
@@ -27,7 +29,7 @@ type Props = {
  * 仕分けのボタンは新着記事画面と同じ`TriageActions`で、「週報候補から外す／戻す」という
  * 以前の文言は「採用／不採用」に揃えた（意味は同じで、`weeklyCandidate`を切り替える）。
  */
-export default function ArticleAnalysisActions({ articleId, status, triage, showDetailLink = true }: Props) {
+export default function ArticleAnalysisActions({ articleId, status, triage, showDetailLink = true, hideActions = false }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -46,10 +48,14 @@ export default function ArticleAnalysisActions({ articleId, status, triage, show
 
   return (
     <span className="ai-actions">
-      <button className={`btn ${status === null ? "primary" : "quiet"}`} type="button" disabled={inFlight || pending} onClick={() => void enqueue()}>
-        {status === null ? "AI解析" : "再解析"}
-      </button>
-      <TriageActions articleId={articleId} state={triage} showDetailLink={false} />
+      {!hideActions && (
+        <>
+          <button className={`btn ${status === null ? "primary" : "quiet"}`} type="button" disabled={inFlight || pending} onClick={() => void enqueue()}>
+            {status === null ? "AI解析" : "再解析"}
+          </button>
+          <TriageActions articleId={articleId} state={triage} showDetailLink={false} />
+        </>
+      )}
       {showDetailLink && <Link className="btn quiet" href={`/dashboard/articles/${articleId}`}>詳細を見る</Link>}
       {error && <span className="ai-error">{error}</span>}
     </span>
