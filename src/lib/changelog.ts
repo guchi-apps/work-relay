@@ -29,6 +29,13 @@ export type ChangelogEntry = {
  */
 export const APP_CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.1.1",
+    date: "2026-11-05",
+    changes: [
+      "記事一覧と新着記事で、要約が無い記事にもAI解析による要約が表示されるようになりました。",
+    ],
+  },
+  {
     version: "2.1.0",
     date: "2026-11-04",
     changes: [
