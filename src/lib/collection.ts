@@ -425,8 +425,9 @@ export async function importWeeklyReport(input: WeeklyReportInput): Promise<Week
       if (outcome === "duplicate") { duplicateCount++; duplicateBusinessCounts[article.business]++; }
       else if (outcome === "merged") { mergedCount++; businessCounts[article.business]++; }
       else if (outcome === "inserted") { insertedCount++; businessCounts[article.business]++; }
-    } catch {
+    } catch (error) {
       errors.push(`ARTICLE_INSERT_FAILED: 記事${index + 1}件目の登録に失敗しました`);
+      console.error(`週報登録: 記事の登録に失敗しました（run=${run.id}, index=${index + 1}, url=${article.url}）`, error);
     }
   }
   const status = errors.length > 0 ? (insertedCount + mergedCount > 0 ? "PARTIAL" : "FAILED") : "SUCCEEDED";
