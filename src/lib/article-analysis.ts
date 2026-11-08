@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { canAcceptReport, classifyFailure, FAILURE_MESSAGE_LIMIT, isDuplicateJobError, LEASE_SECONDS, MAX_CLAIM_JOBS, shouldAutoExcludeFromWeekly, truncateFailureMessage, type FailureKindValue, type FailureSignal, type JobStatusValue } from "@/lib/analysis-job-rules";
+import { tokenColumns, type TokenUsage } from "@/lib/ai-usage";
 import { claimCollectionSearchJobs, releaseExpiredCollectionSearchLeases, reportCollectionSearchResult } from "@/lib/collection-search";
 import { getBusinesses } from "@/lib/businesses";
 import { buildAnalysisPrompt, buildOutputSchema, parseAnalysisPayload, parseAnnouncedOn, type AnalysisImportanceValue, type AnalysisPeerArticle, type AnalysisRelevanceValue } from "@/lib/analysis-prompt";
@@ -148,7 +149,7 @@ async function loadWeekPeers(articleId: string, reference: Date, now: Date): Pro
 // --- 結果の返却（ポーラー向け） ---------------------------------------------------------
 
 export type ReportInput =
-  | { jobId: string; host: string; status: "completed"; result: unknown; model: string | null; codexAuthMode: string | null; durationMs: number | null }
+  | { jobId: string; host: string; status: "completed"; result: unknown; model: string | null; codexAuthMode: string | null; durationMs: number | null; usage?: TokenUsage | null }
   | ({ jobId: string; host: string; status: "failed"; codexAuthMode: string | null; durationMs: number | null } & Omit<FailureSignal, "codexAuthMode">);
 
 export type ReportResult = { ok: true; status: JobStatusValue } | { ok: false; reason: "not_found" | "not_running" };
@@ -200,6 +201,7 @@ export async function reportAnalysisResult(input: ReportInput, now = new Date())
         model: input.model,
         codexAuthMode: input.codexAuthMode,
         durationMs: input.durationMs,
+        ...tokenColumns(input.usage),
       },
     });
     await tx.articleAnalysisJob.update({ where: { id: job.id }, data: { status: "COMPLETED", finishedAt: now, activeKey: null, leaseExpiresAt: null, failureKind: null, failureMessage: null } });
