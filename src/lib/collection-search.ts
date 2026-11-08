@@ -154,7 +154,7 @@ export async function reportCollectionSearchResult(input: ReportCollectionSearch
     return { ok: true, status: "FAILED" };
   }
 
-  for (const [business, policy] of Object.entries(parsed.nextPolicies)) await saveCollectionSearchPolicy(business, policy);
+  for (const [business, policy] of Object.entries(parsed.nextPolicies)) await saveCollectionSearchPolicy(business, policy, job.startedAt ?? now);
 
   let imported;
   try {
