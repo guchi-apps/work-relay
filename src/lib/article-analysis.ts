@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { canAcceptReport, classifyFailure, FAILURE_MESSAGE_LIMIT, isDuplicateJobError, LEASE_SECONDS, MAX_CLAIM_JOBS, shouldAutoExcludeFromWeekly, truncateFailureMessage, type FailureKindValue, type FailureSignal, type JobStatusValue } from "@/lib/analysis-job-rules";
+import { canAcceptReport, classifyFailure, FAILURE_MESSAGE_LIMIT, isDuplicateJobError, leaseExpiresAtForSlot, LEASE_SECONDS, MAX_CLAIM_JOBS, shouldAutoExcludeFromWeekly, truncateFailureMessage, type FailureKindValue, type FailureSignal, type JobStatusValue } from "@/lib/analysis-job-rules";
 import { tokenColumns, type TokenUsage } from "@/lib/ai-usage";
 import { claimCollectionSearchJobs, releaseExpiredCollectionSearchLeases, reportCollectionSearchResult } from "@/lib/collection-search";
 import { getBusinesses } from "@/lib/businesses";
@@ -93,11 +93,12 @@ export async function claimAnalysisJobs(input: ClaimInput, now = new Date()): Pr
   if (take === 0) return [];
 
   const candidates = await prisma.articleAnalysisJob.findMany({ where: { status: "QUEUED" }, orderBy: { queuedAt: "asc" }, take, select: { id: true, articleId: true } });
-  const leaseExpiresAt = new Date(now.getTime() + LEASE_SECONDS * 1000);
   const claimed: ClaimedJob[] = [];
 
   const businesses = await getBusinesses();
   for (const candidate of candidates) {
+    // 実行は取得した順に1件ずつ。何番目に始まる見込みかでリースの期限を決める。
+    const leaseExpiresAt = leaseExpiresAtForSlot(now, claimed.length);
     const updated = await prisma.articleAnalysisJob.updateMany({ where: { id: candidate.id, status: "QUEUED" }, data: { status: "RUNNING", startedAt: now, leaseExpiresAt, workerHost: input.host } });
     if (updated.count === 0) continue;
     await prisma.industryInformation.update({ where: { id: candidate.articleId }, data: { analysisStatus: "RUNNING" } });
@@ -122,7 +123,7 @@ export async function claimAnalysisJobs(input: ClaimInput, now = new Date()): Pr
   // 業界ニュースの収集は日次の定期実行で、人が結果を待っているわけではない。記事の解析より
   // 後ろにして、余った枠でだけ取る。
   if (claimed.length < take) {
-    const searches = await claimCollectionSearchJobs(input.host, take - claimed.length, now);
+    const searches = await claimCollectionSearchJobs(input.host, take - claimed.length, now, claimed.length);
     for (const search of searches) {
       claimed.push({ jobId: search.jobId, kind: "collection_search", articleId: null, articleTitle: search.label, prompt: search.prompt, outputSchema: search.outputSchema, leaseExpiresAt: search.leaseExpiresAt, timeoutSeconds: search.timeoutSeconds });
     }
@@ -156,18 +157,18 @@ export type ReportResult = { ok: true; status: JobStatusValue } | { ok: false; r
 
 /** ポーラーからの結果を保存し、ジョブと記事の状態を進める。 */
 export async function reportAnalysisResult(input: ReportInput, now = new Date()): Promise<ReportResult> {
-  const job = await prisma.articleAnalysisJob.findUnique({ where: { id: input.jobId }, select: { id: true, articleId: true, status: true } });
+  const job = await prisma.articleAnalysisJob.findUnique({ where: { id: input.jobId }, select: { id: true, articleId: true, status: true, workerHost: true } });
   // 記事解析のジョブに無ければ業界ニュースの収集として扱う。
   // ポーラーはどれもjobIdだけを送ってくるため、振り分けはここで行う（報告APIの契約は変えない）。
   if (!job) {
     return reportCollectionSearchResult(input, now);
   }
   // 期限切れで一度QUEUEDへ戻ったジョブへ、遅れて届いた結果は捨てる（次の実行が正になる）。
-  if (!canAcceptReport(job.status)) return { ok: false, reason: "not_running" };
+  if (!canAcceptReport(job.status, job.workerHost, input.host)) return { ok: false, reason: "not_running" };
 
   if (input.status === "failed") {
     const classification = classifyFailure({ exitCode: input.exitCode, stderrTail: input.stderrTail, codexAuthMode: input.codexAuthMode, timedOut: input.timedOut });
-    await finishJob(job.id, job.articleId, classification.status, now, { failureKind: classification.failureKind, failureMessage: classification.message });
+    if (!(await finishJob(job.id, job.articleId, classification.status, now, input.host, { failureKind: classification.failureKind, failureMessage: classification.message }))) return { ok: false, reason: "not_running" };
     await recordWorkerError(input.host, classification.message, now);
     return { ok: true, status: classification.status };
   }
@@ -175,12 +176,15 @@ export async function reportAnalysisResult(input: ReportInput, now = new Date())
   const parsed = parseAnalysisPayload(input.result, await getBusinesses());
   if (!parsed.ok) {
     const message = truncateFailureMessage(`解析結果を読み取れませんでした: ${parsed.error}`);
-    await finishJob(job.id, job.articleId, "FAILED", now, { failureKind: "INVALID_OUTPUT", failureMessage: message });
+    if (!(await finishJob(job.id, job.articleId, "FAILED", now, input.host, { failureKind: "INVALID_OUTPUT", failureMessage: message }))) return { ok: false, reason: "not_running" };
     return { ok: true, status: "FAILED" };
   }
 
   const payload = parsed.value;
-  await prisma.$transaction(async (tx) => {
+  const accepted = await prisma.$transaction(async (tx) => {
+    // 先に状態を完了へ進める。取り直しとの競合で更新できなければ、結果は保存せず捨てる。
+    const done = await tx.articleAnalysisJob.updateMany({ where: { id: job.id, status: "RUNNING", workerHost: input.host }, data: { status: "COMPLETED", finishedAt: now, activeKey: null, leaseExpiresAt: null, failureKind: null, failureMessage: null } });
+    if (done.count === 0) return false;
     await tx.articleAnalysis.create({
       data: {
         articleId: job.articleId,
@@ -204,7 +208,6 @@ export async function reportAnalysisResult(input: ReportInput, now = new Date())
         ...tokenColumns(input.usage),
       },
     });
-    await tx.articleAnalysisJob.update({ where: { id: job.id }, data: { status: "COMPLETED", finishedAt: now, activeKey: null, leaseExpiresAt: null, failureKind: null, failureMessage: null } });
 
     // 対象外と判定された記事は週報の候補から外す。人が既に確定している記事はその判断を優先し、
     // AIの判定で上書きしない（`reviewedAt`が入っているものは触らない）。
@@ -214,16 +217,21 @@ export async function reportAnalysisResult(input: ReportInput, now = new Date())
       where: { id: job.articleId },
       data: { analysisStatus: "COMPLETED", analyzedAt: now, ...(autoExclude ? { weeklyCandidate: false } : {}) },
     });
+    return true;
   });
+  if (!accepted) return { ok: false, reason: "not_running" };
   await prisma.analysisWorker.updateMany({ where: { host: input.host }, data: { lastSeenAt: now, lastError: null } });
   return { ok: true, status: "COMPLETED" };
 }
 
-async function finishJob(jobId: string, articleId: string, status: "FAILED" | "AUTH_REQUIRED", now: Date, failure: { failureKind: FailureKindValue; failureMessage: string }): Promise<void> {
-  await prisma.$transaction([
-    prisma.articleAnalysisJob.update({ where: { id: jobId }, data: { status, finishedAt: now, activeKey: null, leaseExpiresAt: null, ...failure } }),
-    prisma.industryInformation.update({ where: { id: articleId }, data: { analysisStatus: status } }),
-  ]);
+/** 実行中かつ報告したホストが取得したジョブだけを終わらせる。更新できたら`true`。 */
+async function finishJob(jobId: string, articleId: string, status: "FAILED" | "AUTH_REQUIRED", now: Date, host: string, failure: { failureKind: FailureKindValue; failureMessage: string }): Promise<boolean> {
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.articleAnalysisJob.updateMany({ where: { id: jobId, status: "RUNNING", workerHost: host }, data: { status, finishedAt: now, activeKey: null, leaseExpiresAt: null, ...failure } });
+    if (updated.count === 0) return false;
+    await tx.industryInformation.update({ where: { id: articleId }, data: { analysisStatus: status } });
+    return true;
+  });
 }
 
 async function recordWorkerError(host: string, message: string, now: Date): Promise<void> {

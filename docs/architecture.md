@@ -717,8 +717,11 @@ VPSへ移り、AIDEと同じく`127.0.0.1`からの呼び出しになったが�
   ジョブがあるか」を先に読んでから作る方式だと、PM2の複数プロセスから同時に押されたとき両方が
   「無い」と読んで2本積む
 - **落ちたポーラーはリースで回収する。** `claim`時に`leaseExpiresAt`（15分）を入れ、期限切れの
-  `RUNNING`は次の`claim`で`QUEUED`へ戻す。戻ったジョブへ遅れて届いた結果は`canAcceptReport()`が
-  捨てる（次の実行の結果が正）
+  `RUNNING`は次の`claim`で`QUEUED`へ戻す。まとめて取ったジョブはポーラーが順に実行するため、
+  期限は実行順に`LEASE_SECONDS`ずつ後ろへずらす（`leaseExpiresAtForSlot()`。全件同じ期限だと2件目以降が
+  実行中に切れる）。戻ったジョブへ遅れて届いた結果は`canAcceptReport()`が捨てる（次の実行の結果が正）。
+  報告は取得したホスト（`workerHost`）と一致するときだけ受け付け、終了処理も`status: "RUNNING"`＋
+  `workerHost`を条件にした`updateMany`で行う（取り直しとの競合で古いホストの結果が採用されない）
 - **結果は履歴として積む。** `ArticleAnalysis`は1ジョブ1行で、記事本体（`IndustryInformation`）の
   要約・示唆は上書きしない。画面が使うのはAIの生成内容（`ArticleAnalysis`）と、人が確定した内容
   （記事側の`business`・`importance`・`weeklyCandidate`＋`reviewedAt`）の両方で、区別して表示する
