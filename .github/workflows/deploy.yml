@@ -319,6 +319,9 @@ jobs:
           # （guchi-apps/docs の standards/ports.md「ポート番号は 1Password で管理しない」）。
           {
             printf '%s\n' "NODE_ENV=production" "PORT=3115"
+            # ポーラーが使うCodexのモデルID。StatusHubの単価表にあるIDでないと概算金額が出ない（#418）。
+            # シークレットではないので平文で持つ（ポーラーが.envから読む）。
+            printf '%s\n' "CODEX_MODEL=gpt-6-luna"
             printf '%s\n' "APP_COMMIT_SHA=${APP_COMMIT_SHA}"
             printf '%s\n' "DATABASE_URL=${DATABASE_URL}"
             printf '%s\n' "MIGRATE_DATABASE_URL=${MIGRATE_DATABASE_URL}"
