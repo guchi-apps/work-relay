@@ -150,6 +150,22 @@ function jobTimeoutMs(job) {
 }
 
 /**
+ * `turn.completed`のusageを、保存形式（入力はキャッシュ分を除く。Anthropicの`input_tokens`と同じ意味）へ足し込む。
+ * Codexの`input_tokens`はキャッシュ読出を含むため、`cached_input_tokens`を引く。形が違えばnull（記録しない）。
+ */
+function addUsage(total, raw) {
+  const num = (v) => (Number.isInteger(v) && v >= 0 ? v : null);
+  const input = num(raw?.input_tokens);
+  const output = num(raw?.output_tokens);
+  if (input === null || output === null) return total;
+  const cacheRead = num(raw.cached_input_tokens) ?? 0;
+  const cacheWrite = num(raw.cache_write_input_tokens) ?? 0;
+  const next = { inputTokens: Math.max(0, input - cacheRead - cacheWrite), outputTokens: output, cacheReadTokens: cacheRead, cacheWriteTokens: cacheWrite };
+  if (!total) return next;
+  return Object.fromEntries(Object.keys(next).map((key) => [key, total[key] + next[key]]));
+}
+
+/**
  * 1件のジョブをCodexで実行する。
  *
  * `--output-schema`で最終応答の形を縛り、`-o`でその応答だけをファイルへ書かせる
@@ -166,6 +182,8 @@ async function runCodex(job, workDir) {
     "--skip-git-repo-check",
     "--ephemeral",
     "--color", "never",
+    // 標準出力をJSONLにして、`turn.completed`のトークン数だけを読む（最終応答は`-o`のファイルから読む）。
+    "--json",
     // 関連情報の追加調査（一次情報の裏取り）にWeb検索を使う。`codex exec`は`--search`を
     // 受け付けないため、設定の上書きで有効にする。
     "-c", "tools.web_search=true",
@@ -188,10 +206,25 @@ async function runCodex(job, workDir) {
     const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, jobTimeoutMs(job));
 
     // 標準出力は最終応答と同じ内容を含むため保持しない（ログにも残さない）。
-    child.stdout.on("data", () => {});
+    // 行ごとに見て、`turn.completed`のusageだけを拾う（複数ターンなら合算）。
+    let usage = null;
+    let pending = "";
+    const readLine = (line) => {
+      if (!line.includes("turn.completed")) return;
+      try {
+        const event = JSON.parse(line);
+        if (event.type === "turn.completed") usage = addUsage(usage, event.usage);
+      } catch { /* 進捗行などJSONでない行は無視する */ }
+    };
+    child.stdout.on("data", (chunk) => {
+      pending += chunk;
+      const lines = pending.split("\n");
+      pending = lines.pop() ?? "";
+      lines.forEach(readLine);
+    });
     child.stderr.on("data", (chunk) => { stderr = (stderr + chunk).slice(-STDERR_TAIL); });
-    child.on("error", (error) => { clearTimeout(timer); resolve({ exitCode: null, stderr: String(error.message).slice(-STDERR_TAIL), timedOut }); });
-    child.on("close", (code) => { clearTimeout(timer); resolve({ exitCode: code, stderr, timedOut, outputPath }); });
+    child.on("error", (error) => { clearTimeout(timer); resolve({ exitCode: null, stderr: String(error.message).slice(-STDERR_TAIL), timedOut, usage: null }); });
+    child.on("close", (code) => { clearTimeout(timer); readLine(pending); resolve({ exitCode: code, stderr, timedOut, outputPath, usage }); });
 
     child.stdin.end(job.prompt);
   });
@@ -219,7 +252,7 @@ async function handleJob(job, codexAuthMode) {
       return;
     }
 
-    const reported = await api("/api/internal/analysis/report", { jobId: job.jobId, host: HOST, status: "completed", result, model: CODEX_MODEL || null, codexAuthMode, durationMs });
+    const reported = await api("/api/internal/analysis/report", { jobId: job.jobId, host: HOST, status: "completed", result, model: CODEX_MODEL || null, codexAuthMode, durationMs, usage: run.usage });
     log(`job ${job.jobId}: 完了（${reported.status ?? "?"}・${Math.round(durationMs / 1000)}秒）`);
   } finally {
     await rm(workDir, { recursive: true, force: true });

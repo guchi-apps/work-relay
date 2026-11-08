@@ -240,6 +240,12 @@ model ArticleAnalysis {
   model           String?
   codexAuthMode   String?
   durationMs      Int?
+  // Codex CLIの`turn.completed`が返すトークン数（導入前の行・取得できなかった行はnull）。
+  // 入力はキャッシュに載らなかった分だけ（Anthropicの`input_tokens`と同じ意味）。#415
+  inputTokens      Int?
+  outputTokens     Int?
+  cacheReadTokens  Int?
+  cacheWriteTokens Int?
   createdAt       DateTime            @default(now())
 
   @@index([articleId, createdAt])
@@ -289,6 +295,12 @@ model CollectionSearchJob {
   model           String?
   codexAuthMode   String?
   durationMs      Int?
+  // Codex CLIの`turn.completed`が返すトークン数（導入前の行・取得できなかった行はnull）。
+  // 入力はキャッシュに載らなかった分だけ（Anthropicの`input_tokens`と同じ意味）。#415
+  inputTokens      Int?
+  outputTokens     Int?
+  cacheReadTokens  Int?
+  cacheWriteTokens Int?
   searchReport    Json?
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
