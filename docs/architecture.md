@@ -303,6 +303,11 @@ Prismaが出せるJSON列の条件が完全一致までのためで、`ロッカ
 
 ## 日次収集とイベント統合（#43）
 
+**AI関連は大きな変更点だけを集める**（#424）。主要な新機能・大型アップデートと、業務での具体的な活用事例に絞り、
+企業の参入・提携・人事・資金調達や軽微な更新は採らない。Codex検索のプロンプトにAI専用の絞り込み規則があり
+（`collection-search-prompt.ts`）、上限は区分別に3件（`COLLECTION_SEARCH_ARTICLE_LIMIT_BY_BUSINESS`。他は5件）。
+該当が無い週は0件でよい。調整済みの判定基準（`collection_search_policy`）は上書きしないため、古い基準が残っていてもプロンプトの規則が優先する。
+
 事業区分（エクステリア・ロッカー・AI関連）の業界情報の自動収集は`src/lib/collection.ts`の`runDailyCollection()`
 （元は週次のみの`runWeeklyCollection()`）が担当し、毎日05:00 JSTの`collection-daily.yml`が
 `POST /api/collection/daily`を叩く（元は20:00 JSTだったが、#216でChatGPT定期タスクが動いていた

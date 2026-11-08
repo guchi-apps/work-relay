@@ -50,6 +50,15 @@ export type CollectedInformationType = (typeof COLLECTED_INFORMATION_TYPES)[numb
  */
 export const COLLECTION_SEARCH_ARTICLE_LIMIT = 15;
 export const COLLECTION_SEARCH_ARTICLE_LIMIT_PER_BUSINESS = 5;
+/**
+ * 区分ごとの上限の上書き。AI関連は件数が多くなりやすく、大きな新機能・活用事例だけを見たいため
+ * 3件にする（#424）。該当が無い週は0件でよい。
+ */
+export const COLLECTION_SEARCH_ARTICLE_LIMIT_BY_BUSINESS: Record<string, number> = { AI: 3 };
+
+export function articleLimitFor(business: string): number {
+  return COLLECTION_SEARCH_ARTICLE_LIMIT_BY_BUSINESS[business] ?? COLLECTION_SEARCH_ARTICLE_LIMIT_PER_BUSINESS;
+}
 
 /** 検索の対象期間（日）。古い記事で件数を埋めないため補充期間は設けない。 */
 export const COLLECTION_SEARCH_WINDOW_DAYS = 7;
@@ -135,6 +144,16 @@ export function buildCollectionSearchPrompt(now: Date, context?: CollectionSearc
     "- 同じ発表を報じた複数の記事は1件にまとめ、最も原典に近いものを選びます。",
     "- 語句が一致するだけで、各区分の話題が背景や小道具としてしか出てこない記事（芸能・スポーツ・事件など）は選ばないでください。",
     "",
+    ...(defs.some((def) => def.key === "AI")
+      ? [
+          "## AI関連の絞り込み（他の基準・調整指示より優先）",
+          "",
+          `- AI関連は大きな変更点だけを扱い、${articleLimitFor("AI")}件までにします。無理に埋めず、該当が無ければ0件で構いません。`,
+          "- 採用するのは、(1) 主要な新機能・大型アップデート・新プランの追加、(2) 業務でどう活用されているかが具体的に分かる活用事例、のどちらかです。importance が HIGH 相当のものだけを選びます。",
+          "- 次のものは採用しません: 企業の参入・提携・人事・資金調達・買収の話、細かい料金改定、小規模な修正・軽微なアップデート、噂・予想、単なる解説・入門記事。",
+          "",
+        ]
+      : []),
     "## 各記事に付ける内容",
     "",
     "- title・url・sourceName（媒体名）: 検索で実際に開いて確認できた記事のものだけを書きます。**URLを推測で作らない。** 検索サービスのリダイレクトURLではなく、記事そのもののURLを書いてください。",
@@ -382,7 +401,7 @@ export function parseCollectionSearchPayload(raw: unknown, businesses: BusinessD
   for (const item of raw.articles) {
     const article = toArticle(item, keys);
     if (!article) continue;
-    if (articles.length >= COLLECTION_SEARCH_ARTICLE_LIMIT || perBusiness[article.business] >= COLLECTION_SEARCH_ARTICLE_LIMIT_PER_BUSINESS) continue;
+    if (articles.length >= COLLECTION_SEARCH_ARTICLE_LIMIT || perBusiness[article.business] >= articleLimitFor(article.business)) continue;
     perBusiness[article.business]++;
     articles.push(article);
   }
