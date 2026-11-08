@@ -166,6 +166,17 @@ function addUsage(total, raw) {
 }
 
 /**
+ * サーバーへ送る失敗の文。イベントのエラー文があれば先頭を、続けて標準エラーの末尾を並べる。
+ * サーバーは末尾`STDERR_TAIL`文字だけを保存するため、合計がその長さに収まるよう両方を切る。
+ */
+function failureText(eventError, stderr) {
+  if (!eventError) return stderr;
+  const head = eventError.slice(0, Math.floor(STDERR_TAIL / 2));
+  const rest = STDERR_TAIL - head.length - 3;
+  return rest > 0 && stderr ? `${head} / ${stderr.slice(-rest)}` : head;
+}
+
+/**
  * 1件のジョブをCodexで実行する。
  *
  * `--output-schema`で最終応答の形を縛り、`-o`でその応答だけをファイルへ書かせる
@@ -208,12 +219,17 @@ async function runCodex(job, workDir) {
     // 標準出力は最終応答と同じ内容を含むため保持しない（ログにも残さない）。
     // 行ごとに見て、`turn.completed`のusageだけを拾う（複数ターンなら合算）。
     let usage = null;
+    // 失敗時のエラー文（`error`・`turn.failed`イベント）。標準エラーは末尾しか送らないため、
+    // 先頭にある「unexpected status 403」のような肝心の部分が切れる（#432）。こちらは先頭を残す。
+    let eventError = null;
     let pending = "";
     const readLine = (line) => {
-      if (!line.includes("turn.completed")) return;
+      if (!line.includes("turn.completed") && !line.includes("error") && !line.includes("turn.failed")) return;
       try {
         const event = JSON.parse(line);
         if (event.type === "turn.completed") usage = addUsage(usage, event.usage);
+        const message = event.type === "turn.failed" ? event.error?.message : event.type === "error" ? event.message : null;
+        if (typeof message === "string" && message !== "") eventError = message;
       } catch { /* 進捗行などJSONでない行は無視する */ }
     };
     child.stdout.on("data", (chunk) => {
@@ -224,7 +240,7 @@ async function runCodex(job, workDir) {
     });
     child.stderr.on("data", (chunk) => { stderr = (stderr + chunk).slice(-STDERR_TAIL); });
     child.on("error", (error) => { clearTimeout(timer); resolve({ exitCode: null, stderr: String(error.message).slice(-STDERR_TAIL), timedOut, usage: null }); });
-    child.on("close", (code) => { clearTimeout(timer); readLine(pending); resolve({ exitCode: code, stderr, timedOut, outputPath, usage }); });
+    child.on("close", (code) => { clearTimeout(timer); readLine(pending); resolve({ exitCode: code, stderr: failureText(eventError, stderr), timedOut, outputPath, usage }); });
 
     child.stdin.end(job.prompt);
   });

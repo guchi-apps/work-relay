@@ -29,6 +29,13 @@ export type ChangelogEntry = {
  */
 export const APP_CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.2.2",
+    date: "2026-11-08",
+    changes: [
+      "記事のAI解析が失敗したとき、ChatGPT側のエラーページ(HTML)がそのまま表示されることがなくなりました。原因が分かりやすい短い要約で表示されます。",
+    ],
+  },
+  {
     version: "2.2.1",
     date: "2026-11-08",
     changes: [
