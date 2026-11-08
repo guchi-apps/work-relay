@@ -1,4 +1,5 @@
 import { FAILURE_MESSAGE_LIMIT, reportAnalysisResult, type ReportInput } from "@/lib/article-analysis";
+import { parseTokenUsage } from "@/lib/ai-usage";
 import { json, requireAnalysisWorkerSecret } from "@/lib/internal-auth";
 
 export const runtime = "nodejs";
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
 
   let report: ReportInput;
   if (input.status === "completed") {
-    report = { jobId, host, status: "completed", result: input.result, model: typeof input.model === "string" ? input.model.slice(0, 64) : null, codexAuthMode, durationMs };
+    report = { jobId, host, status: "completed", result: input.result, model: typeof input.model === "string" ? input.model.slice(0, 64) : null, codexAuthMode, durationMs, usage: parseTokenUsage(input.usage) };
   } else if (input.status === "failed") {
     report = {
       jobId,

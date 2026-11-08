@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { tokenColumns, type TokenUsage } from "@/lib/ai-usage";
 import { canAcceptReport, classifyFailure, isDuplicateJobError, LEASE_SECONDS, truncateFailureMessage, type FailureKindValue, type FailureSignal, type JobStatusValue } from "@/lib/analysis-job-rules";
 import { importWeeklyReport, type WeeklyReportArticle } from "@/lib/collection";
 import { getBusinesses, businessKeys } from "@/lib/businesses";
@@ -115,7 +116,7 @@ export async function claimCollectionSearchJobs(host: string, take: number, now 
 // --- 結果の返却（ポーラー向け） ---------------------------------------------------------
 
 export type ReportCollectionSearchInput =
-  | { jobId: string; host: string; status: "completed"; result: unknown; model: string | null; codexAuthMode: string | null; durationMs: number | null }
+  | { jobId: string; host: string; status: "completed"; result: unknown; model: string | null; codexAuthMode: string | null; durationMs: number | null; usage?: TokenUsage | null }
   | ({ jobId: string; host: string; status: "failed"; codexAuthMode: string | null; durationMs: number | null } & Omit<FailureSignal, "codexAuthMode">);
 
 export type ReportCollectionSearchResult = { ok: true; status: JobStatusValue } | { ok: false; reason: "not_found" | "not_running" };
@@ -188,6 +189,7 @@ export async function reportCollectionSearchResult(input: ReportCollectionSearch
       model: input.model,
       codexAuthMode: input.codexAuthMode,
       durationMs: input.durationMs,
+      ...tokenColumns(input.usage),
       searchReport: {
         checkedRegions: parsed.searchReport.checkedRegions,
         checkedSources: parsed.searchReport.checkedSources,

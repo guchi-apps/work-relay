@@ -696,7 +696,11 @@ VPSへ移り、AIDEと同じく`127.0.0.1`からの呼び出しになったが�
 **`GET /api/internal/ai-usage`はops-dashboardの「アプリ別のAI利用」向け**（#243）。記事解析・
 ニュース収集のCodex CLI呼出回数を、直近24時間・7日間×モデル別に返す（`src/lib/ai-usage.ts`）。
 **成功したものだけ数える**（記事解析は`ArticleAnalysis.createdAt`、他2つは`COMPLETED`の`finishedAt`）。
-トークン数は持たないので返さない。`model`がnullの行は固定ID`codex`に置換する（ops-dashboardは
+**トークン数も返す**（#415）。ワーカーが`codex exec --json`の`turn.completed`から読み、報告APIの`usage`で送って
+`ArticleAnalysis`・`CollectionSearchJob`の4列へ保存する（入力はキャッシュ読出を引いた値＝Anthropicの`input_tokens`と同じ意味）。
+導入前の行などトークンの無い記録が期間内に1件でもあると、その行は`calls`だけを返す（少なく見せないため。StatusHubは「トークン未集計」と扱う）。
+**金額の単価はStatusHub（`status-hub`の`models.ts`）が持つ**ため、`CODEX_MODEL`を本番で明示しないとモデルが`codex`のままで単価不明になる。
+`model`がnullの行は固定ID`codex`に置換する（ops-dashboardは
 空でない文字列でない`model`が1行でもあると応答全体を捨てるため）。`OPS_API_TOKEN`はops-dashboardが全連携先へ送る共通の1本で、1Passwordの参照先はops-dashboardの項目を共用する（AIDE用`INTERNAL_API_KEY`とは別の値）。
 未設定なら503。
 
