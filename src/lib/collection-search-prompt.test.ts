@@ -6,6 +6,7 @@ import {
   buildCollectionSearchSchema,
   COLLECTION_SEARCH_ARTICLE_LIMIT,
   COLLECTION_SEARCH_ARTICLE_LIMIT_PER_BUSINESS,
+  articleLimitFor,
   COLLECTION_SEARCH_TIMEOUT_SECONDS,
   COLLECTED_INFORMATION_TYPES,
   parseCollectionSearchPayload,
@@ -54,6 +55,15 @@ describe("buildCollectionSearchPrompt", () => {
     assert.ok(prompt.includes("古い記事で件数を埋めない"));
     assert.ok(prompt.includes("査読論文・行政調査"));
     assert.ok(prompt.includes("公開SNS"));
+  });
+
+  it("AI関連は大きな変更点だけに絞り、他の区分より少ない上限にする（#424）", () => {
+    const prompt = buildCollectionSearchPrompt(NOW);
+    assert.ok(prompt.includes("AI関連の絞り込み"));
+    assert.ok(prompt.includes(`${articleLimitFor("AI")}件までにします`));
+    assert.ok(prompt.includes("提携・人事・資金調達"));
+    assert.ok(articleLimitFor("AI") < COLLECTION_SEARCH_ARTICLE_LIMIT_PER_BUSINESS);
+    assert.equal(articleLimitFor("EXTERIOR"), COLLECTION_SEARCH_ARTICLE_LIMIT_PER_BUSINESS);
   });
 
   it("URLを推測で作らせない", () => {
@@ -187,6 +197,15 @@ describe("parseCollectionSearchPayload", () => {
     assert.equal(result.dropped, 4);
   });
 
+  it("AI関連は区分別の上限（3件）で落とす（#424）", () => {
+    const ai = Array.from({ length: 5 }, (_, index) => article({ business: "AI", url: `https://example.com/a${index}` }));
+    const result = parseCollectionSearchPayload({ articles: ai });
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.articles.length, articleLimitFor("AI"));
+    assert.equal(result.dropped, 5 - articleLimitFor("AI"));
+  });
+
   it("不正な日付はnullにして記事は残し、列挙外の値は既定値へ倒す", () => {
     const result = parseCollectionSearchPayload({ articles: [article({ publishedAt: "昨日", occurredAt: "2026-13-45", informationType: "???", importance: "URGENT", periodScope: "?" })] });
     assert.equal(result.ok, true);
@@ -242,6 +261,6 @@ describe("parseCollectionSearchPayload", () => {
     const result = parseCollectionSearchPayload({ articles: ai });
     assert.equal(result.ok, true);
     if (!result.ok) return;
-    assert.equal(result.articles.length, COLLECTION_SEARCH_ARTICLE_LIMIT_PER_BUSINESS);
+    assert.equal(result.articles.length, articleLimitFor("AI"));
   });
 });

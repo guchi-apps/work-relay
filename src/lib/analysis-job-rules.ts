@@ -78,8 +78,19 @@ export function isDuplicateJobError(error: unknown): boolean {
  * `RUNNING`のときだけ受け付ける。リースが切れて`QUEUED`へ戻ったジョブへ遅れて結果が届いた
  * 場合は捨てる（次の実行の結果が正になる）。
  */
-export function canAcceptReport(status: JobStatusValue): boolean {
-  return status === "RUNNING";
+export function canAcceptReport(status: JobStatusValue, workerHost?: string | null, reportHost?: string): boolean {
+  if (status !== "RUNNING") return false;
+  // 取り直された実行へ、古いホストの結果が先に採用されないよう、取得したホストと一致するときだけ受け付ける。
+  return reportHost === undefined || workerHost === reportHost;
+}
+
+/**
+ * まとめて取得したジョブのリース期限。ポーラーは取ったジョブを順番に実行するため、
+ * `slot`番目（0始まり）のジョブは、前の`slot`件が終わってから実行が始まる見込みで、
+ * その分だけ期限を後ろへずらす（全件で同じ期限だと2件目以降が実行中に切れる）。
+ */
+export function leaseExpiresAtForSlot(now: Date, slot: number): Date {
+  return new Date(now.getTime() + LEASE_SECONDS * 1000 * (Math.max(slot, 0) + 1));
 }
 
 /** リース切れ（ポーラーが落ちた・VPSが再起動した）かどうか。 */

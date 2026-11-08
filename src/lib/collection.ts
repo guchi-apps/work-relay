@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { buildFeeds, getBusinesses, zeroCounts, type BusinessDef } from "@/lib/businesses";
-import { decideDailyRunStatus, fitsNormalizedUrlColumn } from "@/lib/collection-rules";
+import { decideDailyRunStatus, fitsNormalizedUrlColumn, MAX_SHORT_TEXT_LENGTH, normalizeUrl } from "@/lib/collection-rules";
 import { getWeekRange, weekCondition, toMergedSources, type MergedSource, type WeekRange } from "@/lib/industry-information";
 import { decideWeeklyCap, IMPORTANCE_RANK, type ImportanceValue, type PriorityFields } from "@/lib/triage";
 
@@ -29,13 +29,7 @@ function field(item: string, name: string): string | null {
   return match?.[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim() ?? null;
 }
 
-export function normalizeUrl(value: string): string {
-  try {
-    const url = new URL(value); url.hash = "";
-    for (const key of [...url.searchParams.keys()]) if (/^(utm_|fbclid$|gclid$|mc_cid$|mc_eid$)/i.test(key)) url.searchParams.delete(key);
-    return url.toString().replace(/\/$/, "");
-  } catch { return value.trim().replace(/\/$/, ""); }
-}
+export { normalizeUrl };
 
 export type WeeklyReportArticle = {
   business: Business;
@@ -425,8 +419,9 @@ export async function importWeeklyReport(input: WeeklyReportInput): Promise<Week
       if (outcome === "duplicate") { duplicateCount++; duplicateBusinessCounts[article.business]++; }
       else if (outcome === "merged") { mergedCount++; businessCounts[article.business]++; }
       else if (outcome === "inserted") { insertedCount++; businessCounts[article.business]++; }
-    } catch {
+    } catch (error) {
       errors.push(`ARTICLE_INSERT_FAILED: 記事${index + 1}件目の登録に失敗しました`);
+      console.error(`週報登録: 記事の登録に失敗しました（run=${run.id}, index=${index + 1}, url=${article.url}）`, error);
     }
   }
   const status = errors.length > 0 ? (insertedCount + mergedCount > 0 ? "PARTIAL" : "FAILED") : "SUCCEEDED";
@@ -455,7 +450,9 @@ function parseFeed(xml: string, feed: Feed, business: BusinessDef, targetFrom: D
     // `normalizedUrl`列（VarChar(512)）に収まらないURLは、登録で例外になる前にここで落とす（#170）。
     const normalizedUrl = normalizeUrl(url);
     if (!fitsNormalizedUrlColumn(normalizedUrl)) return null;
-    return { business: feed.business, title, url: normalizedUrl, sourceName: feed.name, publisher: field(item, "source"), publishedAt, isSupplemental: publishedAt < targetFrom, ...classify(title, business) };
+    // RSSのタイトル・発表元は長さが不定なので、列幅（VARCHAR(191)）で切り詰める（#410）。
+    const publisher = field(item, "source");
+    return { business: feed.business, title: title.slice(0, MAX_SHORT_TEXT_LENGTH), url: normalizedUrl, sourceName: feed.name.slice(0, MAX_SHORT_TEXT_LENGTH), publisher: publisher ? publisher.slice(0, MAX_SHORT_TEXT_LENGTH) : null, publishedAt, isSupplemental: publishedAt < targetFrom, ...classify(title, business) };
   }).filter((item): item is Candidate => item !== null);
 }
 

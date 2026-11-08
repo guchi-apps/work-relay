@@ -4,6 +4,21 @@
 /** `industry_information.normalizedUrl`の列幅（`prisma/schema.prisma`の`VarChar(512)`）。 */
 export const MAX_NORMALIZED_URL_LENGTH = 512;
 
+/**
+ * `industry_information`の`title`・`sourceName`・`publisher`・`targetCompany`・`targetProduct`・`region`の
+ * 列幅。`@db`指定の無い`String`はマイグレーションで`VARCHAR(191)`になる。超えるとINSERTがP2000で落ちる。
+ */
+export const MAX_SHORT_TEXT_LENGTH = 191;
+
+/** 同じ記事を指すURLを揃える（トラッキング用クエリ・フラグメント・末尾スラッシュを除く）。 */
+export function normalizeUrl(value: string): string {
+  try {
+    const url = new URL(value); url.hash = "";
+    for (const key of [...url.searchParams.keys()]) if (/^(utm_|fbclid$|gclid$|mc_cid$|mc_eid$)/i.test(key)) url.searchParams.delete(key);
+    return url.toString().replace(/\/$/, "");
+  } catch { return value.trim().replace(/\/$/, ""); }
+}
+
 /** 正規化後のURLが`normalizedUrl`列に収まるか。超えるとINSERTがP2000で落ちる。 */
 export function fitsNormalizedUrlColumn(normalizedUrl: string): boolean {
   return normalizedUrl.length <= MAX_NORMALIZED_URL_LENGTH;

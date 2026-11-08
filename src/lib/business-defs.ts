@@ -62,13 +62,13 @@ export const DEFAULT_BUSINESSES: BusinessDef[] = [
     label: "AI関連",
     shortLabel: "AI",
     hint: "Gemini · Copilot · 生成AI · 業務活用",
-    scope: "Gemini、Microsoft Copilot（Microsoft 365 Copilot・GitHub Copilot等）の新機能、料金・プラン、法人向けの導入・活用事例、安全性・ガバナンス",
-    defaultPolicy: "Gemini・Copilotについて、新機能、料金・プラン、導入・活用事例、セキュリティやガバナンスに役立つ一次情報を優先する。話題の背景に出るだけの記事、人事・芸能・スポーツなどAIの利用と直接関係しない記事は採用しない。",
+    scope: "Gemini、Microsoft Copilot（Microsoft 365 Copilot・GitHub Copilot等）の主要な新機能・大型アップデートと、業務での具体的な活用事例",
+    defaultPolicy: "Gemini・Copilotについて、主要な新機能・大型アップデートと、業務での具体的な活用事例に絞って一次情報を優先する。企業の参入・提携・人事・資金調達、細かい料金改定、小規模な更新、話題の背景に出るだけの記事は採用しない。該当が無ければ採用しなくてよい。",
     color: "violet",
     sortOrder: 3,
     feeds: [
-      { name: "Gemini・Copilotの公開情報", query: "(Gemini OR Copilot OR \"Microsoft 365 Copilot\" OR \"GitHub Copilot\") (新機能 OR 発表 OR 料金 OR 導入)", lang: "ja" },
-      { name: "Gemini・Copilotの海外情報", query: "(Gemini OR \"Microsoft Copilot\" OR \"GitHub Copilot\") (announces OR launches OR pricing OR enterprise)", lang: "en" },
+      { name: "Gemini・Copilotの公開情報", query: "(Gemini OR Copilot OR \"Microsoft 365 Copilot\" OR \"GitHub Copilot\") (新機能 OR アップデート OR 活用事例)", lang: "ja" },
+      { name: "Gemini・Copilotの海外情報", query: "(Gemini OR \"Microsoft Copilot\" OR \"GitHub Copilot\") (new feature OR launches OR rollout OR use case)", lang: "en" },
     ],
   },
 ];

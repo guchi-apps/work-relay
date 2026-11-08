@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { tokenColumns, type TokenUsage } from "@/lib/ai-usage";
-import { canAcceptReport, classifyFailure, isDuplicateJobError, LEASE_SECONDS, truncateFailureMessage, type FailureKindValue, type FailureSignal, type JobStatusValue } from "@/lib/analysis-job-rules";
+import { canAcceptReport, classifyFailure, isDuplicateJobError, leaseExpiresAtForSlot, truncateFailureMessage, type FailureKindValue, type FailureSignal, type JobStatusValue } from "@/lib/analysis-job-rules";
 import { importWeeklyReport, type WeeklyReportArticle } from "@/lib/collection";
 import { getBusinesses, businessKeys } from "@/lib/businesses";
 import { buildCollectionSearchPrompt, buildCollectionSearchSchema, COLLECTION_SEARCH_TIMEOUT_SECONDS, parseCollectionSearchPayload, type CollectionSearchPolicyContext } from "@/lib/collection-search-prompt";
@@ -75,14 +75,15 @@ export async function releaseExpiredCollectionSearchLeases(now: Date): Promise<v
  * `updateMany`の条件に`status: "QUEUED"`を残しているため、同じジョブを2つのポーラーが同時に
  * 取ろうとしても更新できた側だけが実行する。
  */
-export async function claimCollectionSearchJobs(host: string, take: number, now = new Date()): Promise<ClaimedCollectionSearchJob[]> {
+export async function claimCollectionSearchJobs(host: string, take: number, now = new Date(), slotOffset = 0): Promise<ClaimedCollectionSearchJob[]> {
   if (take <= 0) return [];
 
   const candidates = await prisma.collectionSearchJob.findMany({ where: { status: "QUEUED" }, orderBy: { queuedAt: "asc" }, take, select: { id: true } });
-  const leaseExpiresAt = new Date(now.getTime() + LEASE_SECONDS * 1000);
   const claimed: ClaimedCollectionSearchJob[] = [];
 
   for (const candidate of candidates) {
+    // 記事解析で先に取ったぶんも含め、実行が始まる順番でリースの期限を決める。
+    const leaseExpiresAt = leaseExpiresAtForSlot(now, slotOffset + claimed.length);
     const updated = await prisma.collectionSearchJob.updateMany({ where: { id: candidate.id, status: "QUEUED" }, data: { status: "RUNNING", startedAt: now, leaseExpiresAt, workerHost: host } });
     if (updated.count === 0) continue;
     const policies = await getCollectionSearchPolicies();
@@ -134,10 +135,10 @@ async function finishFailed(jobId: string, status: "FAILED" | "AUTH_REQUIRED", n
  * `RUNNING`のまま残ってリース切れで積み直され、再取り込みはURL一致の冪等性で二重登録にならない。
  */
 export async function reportCollectionSearchResult(input: ReportCollectionSearchInput, now = new Date()): Promise<ReportCollectionSearchResult> {
-  const job = await prisma.collectionSearchJob.findUnique({ where: { id: input.jobId }, select: { id: true, status: true, startedAt: true } });
+  const job = await prisma.collectionSearchJob.findUnique({ where: { id: input.jobId }, select: { id: true, status: true, startedAt: true, workerHost: true } });
   if (!job) return { ok: false, reason: "not_found" };
   // 期限切れで一度QUEUEDへ戻ったジョブへ、遅れて届いた結果は捨てる（次の実行が正になる）。
-  if (!canAcceptReport(job.status)) return { ok: false, reason: "not_running" };
+  if (!canAcceptReport(job.status, job.workerHost, input.host)) return { ok: false, reason: "not_running" };
 
   if (input.status === "failed") {
     const classification = classifyFailure({ exitCode: input.exitCode, stderrTail: input.stderrTail, codexAuthMode: input.codexAuthMode, timedOut: input.timedOut });
@@ -153,7 +154,7 @@ export async function reportCollectionSearchResult(input: ReportCollectionSearch
     return { ok: true, status: "FAILED" };
   }
 
-  for (const [business, policy] of Object.entries(parsed.nextPolicies)) await saveCollectionSearchPolicy(business, policy);
+  for (const [business, policy] of Object.entries(parsed.nextPolicies)) await saveCollectionSearchPolicy(business, policy, job.startedAt ?? now);
 
   let imported;
   try {

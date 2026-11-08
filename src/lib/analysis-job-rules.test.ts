@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { canAcceptReport, classifyFailure, FAILURE_MESSAGE_LIMIT, isDuplicateJobError, isLeaseExpired, shouldAutoExcludeFromWeekly } from "./analysis-job-rules.ts";
+import { canAcceptReport, leaseExpiresAtForSlot, classifyFailure, FAILURE_MESSAGE_LIMIT, isDuplicateJobError, isLeaseExpired, shouldAutoExcludeFromWeekly } from "./analysis-job-rules.ts";
 
 describe("classifyFailure", () => {
   it("ChatGPTのログインが切れていたら認証待ちにする", () => {
@@ -72,6 +72,18 @@ describe("結果の受け付け", () => {
     for (const status of ["QUEUED", "COMPLETED", "FAILED", "AUTH_REQUIRED"] as const) {
       assert.equal(canAcceptReport(status), false, status);
     }
+  });
+
+  it("取得したホストと違うホストの報告は受け付けない", () => {
+    assert.equal(canAcceptReport("RUNNING", "host-a", "host-a"), true);
+    assert.equal(canAcceptReport("RUNNING", "host-a", "host-b"), false);
+    assert.equal(canAcceptReport("RUNNING", null, "host-b"), false);
+  });
+
+  it("まとめて取ったジョブのリースは実行順にずらす", () => {
+    const now = new Date("2026-09-01T12:00:00Z");
+    assert.equal(leaseExpiresAtForSlot(now, 0).toISOString(), "2026-09-01T12:15:00.000Z");
+    assert.equal(leaseExpiresAtForSlot(now, 2).toISOString(), "2026-09-01T12:45:00.000Z");
   });
 
   it("リースの期限切れを判定できる", () => {
