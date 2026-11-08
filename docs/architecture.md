@@ -781,6 +781,13 @@ ChatGPTアカウント認証なら`auth_mode`が`chatgpt`・`OPENAI_API_KEY`が`
 `src/lib/analysis-job-rules.ts`**が行い、ポーラーは終了コードと標準エラーの末尾だけを送る。
 判定条件をサーバーへ寄せてあるため、単体テスト（`pnpm test`）で確かめられる。
 
+- **ChatGPTの前段（CloudFront等）が返したHTMLのエラーページは要約して保存する**（#432）。Codexは
+  受け取ったHTMLをそのままエラー文へ埋め込むため、何もしないと`<BR clear="all">`混じりの英文が画面に
+  並んでいた。Request IDだけ残し、認証切れ・利用枠より先に判定する（HTML内の`401`・`429`で誤判定しない）
+- ポーラーは`--json`の`error`・`turn.failed`イベントのエラー文の**先頭**を、標準エラーの末尾と並べて送る。
+  サーバーは末尾600文字しか保存しないため、標準エラーだけだと`unexpected status 403`のような
+  肝心の先頭が切れて原因（HTTPの状態）が分からなかった
+
 ### VPS側の常駐（PM2）
 
 ポーラー本体はこのリポジトリの`scripts/codex-analysis-worker.mjs`（追加依存なし・Nodeのみ）。
