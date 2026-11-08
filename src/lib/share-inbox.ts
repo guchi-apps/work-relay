@@ -11,6 +11,8 @@
  *
  * Prismaをimportしないため`node --test`から直接読める。
  */
+import { MAX_SHORT_TEXT_LENGTH } from "./collection-rules.ts";
+
 
 export const SHARE_INBOX_TTL_MS = 10 * 60 * 1000;
 export const SHARE_INBOX_MAX_FILES = 20;
@@ -23,7 +25,8 @@ export const SHARE_INBOX_MAX_TOTAL_BYTES = 10 * 1024 * 1024;
 export const SHARE_INBOX_MAX_REQUEST_BYTES = SHARE_INBOX_MAX_TOTAL_BYTES + 1024 * 1024;
 /** 同時に置いておく件数。超えたら古いものから捨てる。 */
 export const SHARE_INBOX_MAX_ENTRIES = 3;
-export const SHARE_TITLE_MAX_LENGTH = 200;
+/** `title`列（VARCHAR(191)）の幅に合わせる（#410）。 */
+export const SHARE_TITLE_MAX_LENGTH = MAX_SHORT_TEXT_LENGTH;
 
 export type SharedFile = { name: string; type: string; data: Uint8Array };
 /** `batch`は、同じ共有としてまとめる写真に共通のID（#163）。まとめない共有（Androidなど）はnull。 */

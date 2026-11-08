@@ -17,6 +17,7 @@
 
 // `@/`のエイリアスは`node --test`の実行時には解決されないため、相対パス＋拡張子で書く。
 import { DEFAULT_BUSINESSES, businessKeys, sortBusinesses, type BusinessDef } from "./business-defs.ts";
+import { MAX_SHORT_TEXT_LENGTH } from "./collection-rules.ts";
 import { formatIsoDate } from "./jst-week.ts";
 
 export type CollectedBusiness = string;
@@ -73,8 +74,9 @@ export const COLLECTION_SEARCH_TIMEOUT_SECONDS = 780;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** 文字列の保存上限。実行ログや長文をそのまま溜め込まないための切り詰め。 */
-const TITLE_LIMIT = 500;
-const SOURCE_NAME_LIMIT = 500;
+/** タイトル・媒体名・発表元などは`VARCHAR(191)`列に入るので、その幅で切り詰める（#410）。 */
+const TITLE_LIMIT = MAX_SHORT_TEXT_LENGTH;
+const SOURCE_NAME_LIMIT = MAX_SHORT_TEXT_LENGTH;
 const URL_LIMIT = 512;
 const TEXT_LIMIT = 2000;
 const LIST_ITEM_LIMIT = 100;
@@ -372,7 +374,7 @@ function toArticle(raw: unknown, keys: readonly string[]): CollectedArticle | nu
     importance: oneOf(raw.importance, ["HIGH", "MEDIUM", "REFERENCE"] as const) ?? "REFERENCE",
     targetCompany: optionalString(raw.targetCompany, SOURCE_NAME_LIMIT),
     targetProduct: optionalString(raw.targetProduct, SOURCE_NAME_LIMIT),
-    region: optionalString(raw.region, 200),
+    region: optionalString(raw.region, MAX_SHORT_TEXT_LENGTH),
     keywords: stringList(raw.keywords),
     tags: stringList(raw.tags),
     periodScope: oneOf(raw.periodScope, ["IN_SCOPE", "PAST_30_DAYS_SUPPLEMENT"] as const) ?? "IN_SCOPE",
