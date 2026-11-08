@@ -37,6 +37,7 @@ async function readAideImageMailConfig(): Promise<AideImageMailConfig | null> {
  */
 export async function POST(request: Request) {
   const user = await getCurrentUser();
+  if (user.status === "unavailable") return json({ error: "auth_unavailable" }, 503);
   if (user.status !== "authenticated") return json({ error: "unauthorized" }, 401);
 
   const config = await readAideImageMailConfig();
