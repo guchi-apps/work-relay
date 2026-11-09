@@ -22,7 +22,9 @@
  *   ANALYSIS_MAX_JOBS              1回のclaimで取る件数。既定 1
  *   ANALYSIS_JOB_TIMEOUT_SECONDS   1件あたりの実行上限。既定 600
  *   CODEX_BIN                      既定 codex
- *   CODEX_MODEL                    省略可。指定するとcodexへ -m で渡す
+ *   CODEX_MODEL                    省略可。指定するとcodexへ -m で渡す。ChatGPTアカウントのCodexが
+ *                                  そのモデルを受け付けなかったときは、-m を外して既定のモデルで
+ *                                  やり直し、以後このプロセスでは -m を付けない（#436）
  *
  * ログには記事本文・原典URL・プロンプト・シークレットを一切出さない（ジョブIDと状態だけ）。
  */
@@ -76,6 +78,23 @@ const MAX_JOBS = Number(process.env.ANALYSIS_MAX_JOBS ?? 1);
 const JOB_TIMEOUT_MS = Number(process.env.ANALYSIS_JOB_TIMEOUT_SECONDS ?? 600) * 1000;
 const CODEX_BIN = process.env.CODEX_BIN ?? "codex";
 const CODEX_MODEL = process.env.CODEX_MODEL ?? "";
+
+/**
+ * `CODEX_MODEL`がChatGPTアカウントのCodexに拒否されたか（#436）。
+ *
+ * 本番は概算金額の単価表に合わせて`CODEX_MODEL`を送っている（#418）が、VPSのCodex CLIや
+ * アカウント側がそのモデルに対応していないと、`-m`を付けた実行が毎回400で落ち、解析も収集も
+ * すべて止まる。拒否されたら`-m`を外して既定のモデルでやり直し、以後はこのプロセスの間
+ * `-m`を付けない（デプロイ等で再起動すれば、もう一度指定どおりに試す）。
+ */
+let modelRejected = false;
+
+/** 指定したモデルをChatGPTアカウントのCodexが受け付けなかったことを表す出力。 */
+const MODEL_REJECTED_PATTERNS = [/model is not supported when using Codex/i, /"code"\s*:\s*"model_not_found"/i];
+
+function isModelRejected(text) {
+  return typeof text === "string" && MODEL_REJECTED_PATTERNS.some((pattern) => pattern.test(text));
+}
 
 /** サーバーへ送る標準エラーの末尾の長さ。失敗の分類に足りるぶんだけ。 */
 const STDERR_TAIL = 600;
@@ -182,7 +201,7 @@ function failureText(eventError, stderr) {
  * `--output-schema`で最終応答の形を縛り、`-o`でその応答だけをファイルへ書かせる
  * （標準出力を解析すると、進捗表示が混ざったときに壊れるため）。
  */
-async function runCodex(job, workDir) {
+async function runCodex(job, workDir, model) {
   const schemaPath = join(workDir, "schema.json");
   const outputPath = join(workDir, "result.json");
   await writeFile(schemaPath, JSON.stringify(job.outputSchema), "utf8");
@@ -202,7 +221,7 @@ async function runCodex(job, workDir) {
     "-o", outputPath,
     "-C", workDir,
   ];
-  if (CODEX_MODEL) args.push("-m", CODEX_MODEL);
+  if (model) args.push("-m", model);
   // プロンプトは引数ではなく標準入力から渡す。記事本文がプロセス一覧（ps）に出ないようにするため。
   args.push("-");
 
@@ -250,7 +269,14 @@ async function handleJob(job, codexAuthMode) {
   const startedAt = Date.now();
   const workDir = await mkdtemp(join(tmpdir(), "research-desk-analysis-"));
   try {
-    const run = await runCodex(job, workDir);
+    let model = modelRejected ? "" : CODEX_MODEL;
+    let run = await runCodex(job, workDir, model);
+    if (model && run.exitCode !== 0 && !run.timedOut && isModelRejected(run.stderr)) {
+      modelRejected = true;
+      log(`job ${job.jobId}: モデル ${model} がCodexに拒否されたため、既定のモデルでやり直します（以後このプロセスでは -m を付けません）`);
+      model = "";
+      run = await runCodex(job, workDir, model);
+    }
     const durationMs = Date.now() - startedAt;
 
     if (run.exitCode !== 0 || run.timedOut) {
@@ -268,7 +294,7 @@ async function handleJob(job, codexAuthMode) {
       return;
     }
 
-    const reported = await api("/api/internal/analysis/report", { jobId: job.jobId, host: HOST, status: "completed", result, model: CODEX_MODEL || null, codexAuthMode, durationMs, usage: run.usage });
+    const reported = await api("/api/internal/analysis/report", { jobId: job.jobId, host: HOST, status: "completed", result, model: model || null, codexAuthMode, durationMs, usage: run.usage });
     log(`job ${job.jobId}: 完了（${reported.status ?? "?"}・${Math.round(durationMs / 1000)}秒）`);
   } finally {
     await rm(workDir, { recursive: true, force: true });

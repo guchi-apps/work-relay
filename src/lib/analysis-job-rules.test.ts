@@ -57,6 +57,16 @@ describe("classifyFailure", () => {
     assert.equal(classifyFailure({ exitCode: 1, stderrTail: tail, codexAuthMode: "chatgpt" }).failureKind, "EXECUTION_FAILED");
   });
 
+  it("指定モデルをChatGPTアカウントのCodexが拒否したら、原文ではなく直し方を出す（#436）", () => {
+    const tail = String.raw`{"type":"error","status":400,"error":{"type":"invalid_request_error","message":"The 'gpt-6-luna' model is not supported when using Codex with a ChatGPT account.","code":"model_not_found"}} / AEWMP9Zb0</HTML>") ERROR rmcp::transport::worker: worker quit with fatal: Transport channel closed, when AuthRequired(AuthRequiredError { www_authenticate_header: "Bearer realm="OAuth"" }) 401 Unauthorized`;
+    const result = classifyFailure({ exitCode: 1, stderrTail: tail, codexAuthMode: "chatgpt" });
+    assert.equal(result.status, "FAILED");
+    assert.equal(result.failureKind, "EXECUTION_FAILED");
+    assert.match(result.message, /gpt-6-luna/);
+    assert.match(result.message, /CODEX_MODEL/);
+    assert.ok(!/rmcp|AuthRequired/.test(result.message), result.message);
+  });
+
   it("長い実行ログは保存する長さまで切り詰める", () => {
     const result = classifyFailure({ exitCode: 1, stderrTail: "x".repeat(5000), codexAuthMode: "chatgpt" });
     assert.ok(result.message.length <= FAILURE_MESSAGE_LIMIT + 1);
