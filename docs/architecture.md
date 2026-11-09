@@ -705,6 +705,11 @@ VPSへ移り、AIDEと同じく`127.0.0.1`からの呼び出しになったが�
 `ArticleAnalysis`・`CollectionSearchJob`の4列へ保存する（入力はキャッシュ読出を引いた値＝Anthropicの`input_tokens`と同じ意味）。
 導入前の行などトークンの無い記録が期間内に1件でもあると、その行は`calls`だけを返す（少なく見せないため。StatusHubは「トークン未集計」と扱う）。
 **金額の単価はStatusHub（`status-hub`の`models.ts`）が持つ**ため、`CODEX_MODEL`を本番で明示しないとモデルが`codex`のままで単価不明になる。そのため`deploy.yml`が`CODEX_MODEL=gpt-6-luna`を平文で`.env`へ送る（#418。モデルを変えるときはStatusHubの単価表にあるIDにする）。
+**ChatGPTアカウントのCodexがそのモデルを受け付けないと`-m`付きの実行が毎回400で落ち、解析も収集も全部止まる**（#436。
+`The 'gpt-6-luna' model is not supported when using Codex with a ChatGPT account.`）。サブPCのCodex CLI 0.167.0では同じアカウントで通るため、
+VPS側のCodex CLIの版などで変わりうる。そのためポーラーは拒否されたら`-m`を外して既定のモデルでやり直し、そのプロセスの間は以後`-m`を付けない
+（再起動で再び指定どおりに試す）。やり直した実行は実際のモデルが分からないので`model`をnull（＝`codex`・単価不明）で報告する。
+ログに「既定のモデルでやり直します」が出ていたら、VPSで`codex --version`を確かめてCLIを更新するか、`CODEX_MODEL`を見直す。
 `model`がnullの行は固定ID`codex`に置換する（ops-dashboardは
 空でない文字列でない`model`が1行でもあると応答全体を捨てるため）。`OPS_API_TOKEN`はops-dashboardが全連携先へ送る共通の1本で、1Passwordの参照先はops-dashboardの項目を共用する（AIDE用`INTERNAL_API_KEY`とは別の値）。
 未設定なら503。
@@ -784,6 +789,9 @@ ChatGPTアカウント認証なら`auth_mode`が`chatgpt`・`OPENAI_API_KEY`が`
 - **ChatGPTの前段（CloudFront等）が返したHTMLのエラーページは要約して保存する**（#432）。Codexは
   受け取ったHTMLをそのままエラー文へ埋め込むため、何もしないと`<BR clear="all">`混じりの英文が画面に
   並んでいた。Request IDだけ残し、認証切れ・利用枠より先に判定する（HTML内の`401`・`429`で誤判定しない）
+- **指定モデルの拒否（`model is not supported when using Codex`・`model_not_found`）は直し方の一文に置き換える**（#436）。
+  後ろに続くMCPサーバーの接続エラー（VPSの`~/.codex/config.toml`にあるNotion等）や`401`の文字で認証切れと誤判定しないよう、
+  HTMLエラーページ・認証切れより先に判定する
 - ポーラーは`--json`の`error`・`turn.failed`イベントのエラー文の**先頭**を、標準エラーの末尾と並べて送る。
   サーバーは末尾600文字しか保存しないため、標準エラーだけだと`unexpected status 403`のような
   肝心の先頭が切れて原因（HTTPの状態）が分からなかった
