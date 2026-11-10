@@ -35,6 +35,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { hostname, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { describeModelRejection, isModelRejected } from "./codex-model-diagnosis.mjs";
 
 /** このスクリプトから見たリポジトリ（VPSでは配布先ディレクトリ）の直下。 */
 const APP_DIR = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -88,13 +89,6 @@ const CODEX_MODEL = process.env.CODEX_MODEL ?? "";
  * `-m`を付けない（デプロイ等で再起動すれば、もう一度指定どおりに試す）。
  */
 let modelRejected = false;
-
-/** 指定したモデルをChatGPTアカウントのCodexが受け付けなかったことを表す出力。 */
-const MODEL_REJECTED_PATTERNS = [/model is not supported when using Codex/i, /"code"\s*:\s*"model_not_found"/i];
-
-function isModelRejected(text) {
-  return typeof text === "string" && MODEL_REJECTED_PATTERNS.some((pattern) => pattern.test(text));
-}
 
 /** モデル拒否後の再試行に最低限必要な残り時間（ミリ秒）。これを下回るなら再試行せず失敗として報告する。 */
 const MIN_RETRY_MS = 5_000;
@@ -283,7 +277,7 @@ async function runCodex(job, workDir, model, timeoutMs) {
   });
 }
 
-async function handleJob(job, codexAuthMode) {
+async function handleJob(job, codexAuthMode, codexVersion) {
   const startedAt = Date.now();
   const workDir = await mkdtemp(join(tmpdir(), "research-desk-analysis-"));
   try {
@@ -292,15 +286,18 @@ async function handleJob(job, codexAuthMode) {
     // 所要時間ぶんだけサーバー側のリース（15分）を超え、別のポーラーに同じジョブを横取りされる。
     const deadline = startedAt + jobTimeoutMs(job);
     let run = await runCodex(job, workDir, model, deadline - Date.now());
+    // 既定のモデルでやり直したときの説明。完了報告に添えて、画面でも原因が読めるようにする。
+    let modelNote = null;
     if (model && run.exitCode !== 0 && !run.timedOut && isModelRejected(run.stderr)) {
       modelRejected = true;
       const remainingMs = deadline - Date.now();
       if (remainingMs >= MIN_RETRY_MS) {
-        log(`job ${job.jobId}: モデル ${model} がCodexに拒否されたため、既定のモデルでやり直します（以後このプロセスでは -m を付けません）`);
+        log(`job ${job.jobId}: ${describeModelRejection({ stderr: run.stderr, model, codexVersion, retried: true })}（以後このプロセスでは -m を付けません）`);
+        modelNote = describeModelRejection({ stderr: run.stderr, model, codexVersion, retried: true, done: true });
         model = "";
         run = await runCodex(job, workDir, model, remainingMs);
       } else {
-        log(`job ${job.jobId}: モデル ${model} が拒否されましたが、残り時間が足りないためやり直さず失敗として報告します（以後このプロセスでは -m を付けません）`);
+        log(`job ${job.jobId}: ${describeModelRejection({ stderr: run.stderr, model, codexVersion, retried: false })}残り時間が足りないためやり直さず失敗として報告します（以後このプロセスでは -m を付けません）`);
       }
     }
     const durationMs = Date.now() - startedAt;
@@ -320,7 +317,7 @@ async function handleJob(job, codexAuthMode) {
       return;
     }
 
-    const reported = await api("/api/internal/analysis/report", { jobId: job.jobId, host: HOST, status: "completed", result, model: model || null, codexAuthMode, durationMs, usage: run.usage });
+    const reported = await api("/api/internal/analysis/report", { jobId: job.jobId, host: HOST, status: "completed", result, model: model || null, codexAuthMode, durationMs, usage: run.usage, note: modelNote });
     log(`job ${job.jobId}: 完了（${reported.status ?? "?"}・${Math.round(durationMs / 1000)}秒）`);
   } finally {
     await rm(workDir, { recursive: true, force: true });
@@ -333,7 +330,7 @@ async function tick(codexVersion) {
   if (!Array.isArray(jobs) || jobs.length === 0) return;
   log(`${jobs.length}件のジョブを取得しました（認証方式 ${codexAuthMode}）`);
   for (const job of jobs) {
-    await handleJob(job, codexAuthMode);
+    await handleJob(job, codexAuthMode, codexVersion);
   }
 }
 

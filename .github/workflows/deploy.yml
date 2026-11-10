@@ -171,6 +171,7 @@ jobs:
             prisma \
             deploy \
             scripts/codex-analysis-worker.mjs \
+            scripts/codex-model-diagnosis.mjs \
             next.config.mjs
 
       - name: Upload artifact
