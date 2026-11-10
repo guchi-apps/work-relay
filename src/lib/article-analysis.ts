@@ -150,7 +150,7 @@ async function loadWeekPeers(articleId: string, reference: Date, now: Date): Pro
 // --- 結果の返却（ポーラー向け） ---------------------------------------------------------
 
 export type ReportInput =
-  | { jobId: string; host: string; status: "completed"; result: unknown; model: string | null; codexAuthMode: string | null; durationMs: number | null; usage?: TokenUsage | null }
+  | { jobId: string; host: string; status: "completed"; result: unknown; model: string | null; codexAuthMode: string | null; durationMs: number | null; usage?: TokenUsage | null; note?: string | null }
   | ({ jobId: string; host: string; status: "failed"; codexAuthMode: string | null; durationMs: number | null } & Omit<FailureSignal, "codexAuthMode">);
 
 export type ReportResult = { ok: true; status: JobStatusValue } | { ok: false; reason: "not_found" | "not_running" };
@@ -181,9 +181,11 @@ export async function reportAnalysisResult(input: ReportInput, now = new Date())
   }
 
   const payload = parsed.value;
+  // 成功でも伝えたいこと（既定のモデルでやり直した等。#444）は、失敗ではないが`failureMessage`の列へ残し、画面に出す。
+  const completionNote = input.note ? truncateFailureMessage(input.note) : null;
   const accepted = await prisma.$transaction(async (tx) => {
     // 先に状態を完了へ進める。取り直しとの競合で更新できなければ、結果は保存せず捨てる。
-    const done = await tx.articleAnalysisJob.updateMany({ where: { id: job.id, status: "RUNNING", workerHost: input.host }, data: { status: "COMPLETED", finishedAt: now, activeKey: null, leaseExpiresAt: null, failureKind: null, failureMessage: null } });
+    const done = await tx.articleAnalysisJob.updateMany({ where: { id: job.id, status: "RUNNING", workerHost: input.host }, data: { status: "COMPLETED", finishedAt: now, activeKey: null, leaseExpiresAt: null, failureKind: null, failureMessage: completionNote } });
     if (done.count === 0) return false;
     await tx.articleAnalysis.create({
       data: {

@@ -32,7 +32,7 @@ export async function POST(request: Request) {
 
   let report: ReportInput;
   if (input.status === "completed") {
-    report = { jobId, host, status: "completed", result: input.result, model: typeof input.model === "string" ? input.model.slice(0, 64) : null, codexAuthMode, durationMs, usage: parseTokenUsage(input.usage) };
+    report = { jobId, host, status: "completed", result: input.result, model: typeof input.model === "string" ? input.model.slice(0, 64) : null, codexAuthMode, durationMs, usage: parseTokenUsage(input.usage), note: typeof input.note === "string" && input.note.trim() !== "" ? input.note : null };
   } else if (input.status === "failed") {
     report = {
       jobId,

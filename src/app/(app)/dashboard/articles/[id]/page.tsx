@@ -82,6 +82,8 @@ export default async function ArticleDetailPage({ params, searchParams }: { para
             {status === "AUTH_REQUIRED" && <>　VPSで <code>codex login status</code> を確認し、<code>codex login</code> でログインし直してから再実行してください。記事データは失われていません。</>}
           </p>}
 
+          {job && status === "COMPLETED" && job.failureMessage && <p className="ai-hint">{job.failureMessage}</p>}
+
           {!analysis ? (
             <p className="body-text">まだ解析されていません。「AI解析」を押すとVPS上のCodex CLIがChatGPTアカウントで解析します。</p>
           ) : <>
