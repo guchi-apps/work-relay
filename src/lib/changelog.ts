@@ -29,6 +29,13 @@ export type ChangelogEntry = {
  */
 export const APP_CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.2.3",
+    date: "2026-11-10",
+    changes: [
+      "記事のAI解析で、指定したモデルが使えないアカウントでも、既定のモデルで自動的にやり直して解析が完了するようになりました。",
+    ],
+  },
+  {
     version: "2.2.2",
     date: "2026-11-08",
     changes: [

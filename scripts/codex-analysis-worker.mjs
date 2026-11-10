@@ -22,7 +22,9 @@
  *   ANALYSIS_MAX_JOBS              1回のclaimで取る件数。既定 1
  *   ANALYSIS_JOB_TIMEOUT_SECONDS   1件あたりの実行上限。既定 600
  *   CODEX_BIN                      既定 codex
- *   CODEX_MODEL                    省略可。指定するとcodexへ -m で渡す
+ *   CODEX_MODEL                    省略可。指定するとcodexへ -m で渡す。ChatGPTアカウントのCodexが
+ *                                  そのモデルを受け付けなかったときは、-m を外して既定のモデルで
+ *                                  やり直し、以後このプロセスでは -m を付けない（#436）
  *
  * ログには記事本文・原典URL・プロンプト・シークレットを一切出さない（ジョブIDと状態だけ）。
  */
@@ -76,6 +78,26 @@ const MAX_JOBS = Number(process.env.ANALYSIS_MAX_JOBS ?? 1);
 const JOB_TIMEOUT_MS = Number(process.env.ANALYSIS_JOB_TIMEOUT_SECONDS ?? 600) * 1000;
 const CODEX_BIN = process.env.CODEX_BIN ?? "codex";
 const CODEX_MODEL = process.env.CODEX_MODEL ?? "";
+
+/**
+ * `CODEX_MODEL`がChatGPTアカウントのCodexに拒否されたか（#436）。
+ *
+ * 本番は概算金額の単価表に合わせて`CODEX_MODEL`を送っている（#418）が、VPSのCodex CLIや
+ * アカウント側がそのモデルに対応していないと、`-m`を付けた実行が毎回400で落ち、解析も収集も
+ * すべて止まる。拒否されたら`-m`を外して既定のモデルでやり直し、以後はこのプロセスの間
+ * `-m`を付けない（デプロイ等で再起動すれば、もう一度指定どおりに試す）。
+ */
+let modelRejected = false;
+
+/** 指定したモデルをChatGPTアカウントのCodexが受け付けなかったことを表す出力。 */
+const MODEL_REJECTED_PATTERNS = [/model is not supported when using Codex/i, /"code"\s*:\s*"model_not_found"/i];
+
+function isModelRejected(text) {
+  return typeof text === "string" && MODEL_REJECTED_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+/** モデル拒否後の再試行に最低限必要な残り時間（ミリ秒）。これを下回るなら再試行せず失敗として報告する。 */
+const MIN_RETRY_MS = 5_000;
 
 /** サーバーへ送る標準エラーの末尾の長さ。失敗の分類に足りるぶんだけ。 */
 const STDERR_TAIL = 600;
@@ -166,6 +188,21 @@ function addUsage(total, raw) {
 }
 
 /**
+ * `error`・`turn.failed`イベントから失敗の文を取り出す。形は2通りある（#440）:
+ * `{"type":"error","message":"..."}`と、`{"type":"error","error":{"message":"...","code":"..."}}`
+ * （モデル拒否など。`turn.failed`も`error`の下に持つ）。コードは再試行判定
+ * （`isModelRejected`）が読めるよう`{"code":"..."}`の形で文末へ足す。
+ */
+function eventErrorText(event) {
+  if (event?.type !== "error" && event?.type !== "turn.failed") return null;
+  const nested = event.error && typeof event.error === "object" ? event.error : null;
+  const raw = event.type === "error" ? (typeof event.message === "string" && event.message !== "" ? event.message : nested?.message) : nested?.message;
+  const message = typeof raw === "string" ? raw : "";
+  const code = typeof nested?.code === "string" && nested.code !== "" ? JSON.stringify({ code: nested.code }) : "";
+  return [message, code].filter(Boolean).join(" ") || null;
+}
+
+/**
  * サーバーへ送る失敗の文。イベントのエラー文があれば先頭を、続けて標準エラーの末尾を並べる。
  * サーバーは末尾`STDERR_TAIL`文字だけを保存するため、合計がその長さに収まるよう両方を切る。
  */
@@ -182,7 +219,7 @@ function failureText(eventError, stderr) {
  * `--output-schema`で最終応答の形を縛り、`-o`でその応答だけをファイルへ書かせる
  * （標準出力を解析すると、進捗表示が混ざったときに壊れるため）。
  */
-async function runCodex(job, workDir) {
+async function runCodex(job, workDir, model, timeoutMs) {
   const schemaPath = join(workDir, "schema.json");
   const outputPath = join(workDir, "result.json");
   await writeFile(schemaPath, JSON.stringify(job.outputSchema), "utf8");
@@ -202,7 +239,7 @@ async function runCodex(job, workDir) {
     "-o", outputPath,
     "-C", workDir,
   ];
-  if (CODEX_MODEL) args.push("-m", CODEX_MODEL);
+  if (model) args.push("-m", model);
   // プロンプトは引数ではなく標準入力から渡す。記事本文がプロセス一覧（ps）に出ないようにするため。
   args.push("-");
 
@@ -214,7 +251,7 @@ async function runCodex(job, workDir) {
     const child = spawn(CODEX_BIN, args, { env, cwd: workDir, stdio: ["pipe", "pipe", "pipe"] });
     let stderr = "";
     let timedOut = false;
-    const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, jobTimeoutMs(job));
+    const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, timeoutMs);
 
     // 標準出力は最終応答と同じ内容を含むため保持しない（ログにも残さない）。
     // 行ごとに見て、`turn.completed`のusageだけを拾う（複数ターンなら合算）。
@@ -228,8 +265,8 @@ async function runCodex(job, workDir) {
       try {
         const event = JSON.parse(line);
         if (event.type === "turn.completed") usage = addUsage(usage, event.usage);
-        const message = event.type === "turn.failed" ? event.error?.message : event.type === "error" ? event.message : null;
-        if (typeof message === "string" && message !== "") eventError = message;
+        const message = eventErrorText(event);
+        if (message) eventError = message;
       } catch { /* 進捗行などJSONでない行は無視する */ }
     };
     child.stdout.on("data", (chunk) => {
@@ -250,7 +287,22 @@ async function handleJob(job, codexAuthMode) {
   const startedAt = Date.now();
   const workDir = await mkdtemp(join(tmpdir(), "research-desk-analysis-"));
   try {
-    const run = await runCodex(job, workDir);
+    let model = modelRejected ? "" : CODEX_MODEL;
+    // 上限はジョブ全体で1回だけ数える（#440）。再試行に同じ上限をもう一度与えると、最初の実行の
+    // 所要時間ぶんだけサーバー側のリース（15分）を超え、別のポーラーに同じジョブを横取りされる。
+    const deadline = startedAt + jobTimeoutMs(job);
+    let run = await runCodex(job, workDir, model, deadline - Date.now());
+    if (model && run.exitCode !== 0 && !run.timedOut && isModelRejected(run.stderr)) {
+      modelRejected = true;
+      const remainingMs = deadline - Date.now();
+      if (remainingMs >= MIN_RETRY_MS) {
+        log(`job ${job.jobId}: モデル ${model} がCodexに拒否されたため、既定のモデルでやり直します（以後このプロセスでは -m を付けません）`);
+        model = "";
+        run = await runCodex(job, workDir, model, remainingMs);
+      } else {
+        log(`job ${job.jobId}: モデル ${model} が拒否されましたが、残り時間が足りないためやり直さず失敗として報告します（以後このプロセスでは -m を付けません）`);
+      }
+    }
     const durationMs = Date.now() - startedAt;
 
     if (run.exitCode !== 0 || run.timedOut) {
@@ -268,7 +320,7 @@ async function handleJob(job, codexAuthMode) {
       return;
     }
 
-    const reported = await api("/api/internal/analysis/report", { jobId: job.jobId, host: HOST, status: "completed", result, model: CODEX_MODEL || null, codexAuthMode, durationMs, usage: run.usage });
+    const reported = await api("/api/internal/analysis/report", { jobId: job.jobId, host: HOST, status: "completed", result, model: model || null, codexAuthMode, durationMs, usage: run.usage });
     log(`job ${job.jobId}: 完了（${reported.status ?? "?"}・${Math.round(durationMs / 1000)}秒）`);
   } finally {
     await rm(workDir, { recursive: true, force: true });
