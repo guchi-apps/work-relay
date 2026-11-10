@@ -105,6 +105,8 @@ describe("ポーラーのモデル拒否時の再試行（#440）", () => {
     assert.ok(!invocations[1].includes("-m"));
     assert.equal(reports.length, 1);
     assert.equal(reports[0].status, "completed");
+    // やり直した事実と原因・対処を日本語の備考として報告に添える（#444）。
+    assert.match(String(reports[0].note), /指定モデル「gpt-6-luna」.*codex-fake 0.*CODEX_MODEL.*単価不明/);
   });
 
   it("文言が違ってもerror.codeがmodel_not_foundなら、-mなしでやり直す", async () => {
