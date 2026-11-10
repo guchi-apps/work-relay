@@ -96,6 +96,9 @@ function isModelRejected(text) {
   return typeof text === "string" && MODEL_REJECTED_PATTERNS.some((pattern) => pattern.test(text));
 }
 
+/** モデル拒否後の再試行に最低限必要な残り時間（ミリ秒）。これを下回るなら再試行せず失敗として報告する。 */
+const MIN_RETRY_MS = 5_000;
+
 /** サーバーへ送る標準エラーの末尾の長さ。失敗の分類に足りるぶんだけ。 */
 const STDERR_TAIL = 600;
 
@@ -216,7 +219,7 @@ function failureText(eventError, stderr) {
  * `--output-schema`で最終応答の形を縛り、`-o`でその応答だけをファイルへ書かせる
  * （標準出力を解析すると、進捗表示が混ざったときに壊れるため）。
  */
-async function runCodex(job, workDir, model) {
+async function runCodex(job, workDir, model, timeoutMs) {
   const schemaPath = join(workDir, "schema.json");
   const outputPath = join(workDir, "result.json");
   await writeFile(schemaPath, JSON.stringify(job.outputSchema), "utf8");
@@ -248,7 +251,7 @@ async function runCodex(job, workDir, model) {
     const child = spawn(CODEX_BIN, args, { env, cwd: workDir, stdio: ["pipe", "pipe", "pipe"] });
     let stderr = "";
     let timedOut = false;
-    const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, jobTimeoutMs(job));
+    const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, timeoutMs);
 
     // 標準出力は最終応答と同じ内容を含むため保持しない（ログにも残さない）。
     // 行ごとに見て、`turn.completed`のusageだけを拾う（複数ターンなら合算）。
@@ -285,12 +288,20 @@ async function handleJob(job, codexAuthMode) {
   const workDir = await mkdtemp(join(tmpdir(), "research-desk-analysis-"));
   try {
     let model = modelRejected ? "" : CODEX_MODEL;
-    let run = await runCodex(job, workDir, model);
+    // 上限はジョブ全体で1回だけ数える（#440）。再試行に同じ上限をもう一度与えると、最初の実行の
+    // 所要時間ぶんだけサーバー側のリース（15分）を超え、別のポーラーに同じジョブを横取りされる。
+    const deadline = startedAt + jobTimeoutMs(job);
+    let run = await runCodex(job, workDir, model, deadline - Date.now());
     if (model && run.exitCode !== 0 && !run.timedOut && isModelRejected(run.stderr)) {
       modelRejected = true;
-      log(`job ${job.jobId}: モデル ${model} がCodexに拒否されたため、既定のモデルでやり直します（以後このプロセスでは -m を付けません）`);
-      model = "";
-      run = await runCodex(job, workDir, model);
+      const remainingMs = deadline - Date.now();
+      if (remainingMs >= MIN_RETRY_MS) {
+        log(`job ${job.jobId}: モデル ${model} がCodexに拒否されたため、既定のモデルでやり直します（以後このプロセスでは -m を付けません）`);
+        model = "";
+        run = await runCodex(job, workDir, model, remainingMs);
+      } else {
+        log(`job ${job.jobId}: モデル ${model} が拒否されましたが、残り時間が足りないためやり直さず失敗として報告します（以後このプロセスでは -m を付けません）`);
+      }
     }
     const durationMs = Date.now() - startedAt;
 
