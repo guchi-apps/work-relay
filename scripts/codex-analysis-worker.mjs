@@ -185,6 +185,21 @@ function addUsage(total, raw) {
 }
 
 /**
+ * `error`・`turn.failed`イベントから失敗の文を取り出す。形は2通りある（#440）:
+ * `{"type":"error","message":"..."}`と、`{"type":"error","error":{"message":"...","code":"..."}}`
+ * （モデル拒否など。`turn.failed`も`error`の下に持つ）。コードは再試行判定
+ * （`isModelRejected`）が読めるよう`{"code":"..."}`の形で文末へ足す。
+ */
+function eventErrorText(event) {
+  if (event?.type !== "error" && event?.type !== "turn.failed") return null;
+  const nested = event.error && typeof event.error === "object" ? event.error : null;
+  const raw = event.type === "error" ? (typeof event.message === "string" && event.message !== "" ? event.message : nested?.message) : nested?.message;
+  const message = typeof raw === "string" ? raw : "";
+  const code = typeof nested?.code === "string" && nested.code !== "" ? JSON.stringify({ code: nested.code }) : "";
+  return [message, code].filter(Boolean).join(" ") || null;
+}
+
+/**
  * サーバーへ送る失敗の文。イベントのエラー文があれば先頭を、続けて標準エラーの末尾を並べる。
  * サーバーは末尾`STDERR_TAIL`文字だけを保存するため、合計がその長さに収まるよう両方を切る。
  */
@@ -247,8 +262,8 @@ async function runCodex(job, workDir, model) {
       try {
         const event = JSON.parse(line);
         if (event.type === "turn.completed") usage = addUsage(usage, event.usage);
-        const message = event.type === "turn.failed" ? event.error?.message : event.type === "error" ? event.message : null;
-        if (typeof message === "string" && message !== "") eventError = message;
+        const message = eventErrorText(event);
+        if (message) eventError = message;
       } catch { /* 進捗行などJSONでない行は無視する */ }
     };
     child.stdout.on("data", (chunk) => {
