@@ -353,7 +353,13 @@ AIDE経由の週報登録（`importWeeklyReport()`）と自動収集（`runDaily
 受け皿**にした。タブ「未判定／採用／不採用／すべて」（既定は未判定）、カードごとの
 「採用」「不採用」ボタン（`src/components/TriageActions.tsx`）を持つ（左のチェックとまとめて仕分ける
 バーは#449で削除した）。保存先は`POST /api/articles/triage`
-（`{ articleIds: string[], decision: "adopt" | "reject" }`、Supabaseセッション認証）。
+（`{ articleIds: string[], decision: "adopt" | "reject", note?: string }`、Supabaseセッション認証）。
+**採用・不採用は1タップで確定し、それぞれの右の「▾」（スプリットボタン）を押したときだけ根拠（任意）の
+入力欄が開く**（#451。#194は不採用で理由欄が必ず開く作りだった）。新着記事画面のカードは「AI解析」
+「メールで送る」を出さず（`ArticleAnalysisBlock`の`triageOnly`）、採用・不採用・詳細だけにした
+（AI解析・メールは記事詳細画面から行う）。根拠は`reviewNote`に保存され、判定が反転する記事を
+根拠なしで仕分けたときは前回の根拠を消す（`setTriageDecision()`。採用時の根拠が不採用理由として
+収集プロンプトへ渡らないようにするため）。
 
 - **仕分けの状態は専用の列を持たず、#79の`weeklyCandidate`と`reviewedAt`から導出する**
   （`src/lib/triage.ts`の`getTriageState()`）。未判定＝`reviewedAt`が`null`、採用＝人が判断して

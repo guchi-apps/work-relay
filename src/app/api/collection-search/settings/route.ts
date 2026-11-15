@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { getBusinesses, normalizeBusinessKey } from "@/lib/businesses";
+import { getBusinesses, normalizeBusinessKey, normalizeExcludeKeywords } from "@/lib/businesses";
+import { prisma } from "@/lib/db";
 import { getCollectionSearchPolicies, requestCollectionSearchPolicyAdjustment, type CollectionSearchBusiness, type CollectionSearchPolicyView } from "@/lib/collection-search-settings";
 
 export const runtime = "nodejs";
@@ -32,4 +33,18 @@ export async function POST(request: Request) {
   const value = await requestCollectionSearchPolicyAdjustment(business, instruction);
   if (!value) return NextResponse.json({ error: "invalid_instruction" }, { status: 400 });
   return NextResponse.json(serialize(value));
+}
+
+/** 事業区分ごとの除外キーワードを丸ごと置き換える（#452）。 */
+export async function PUT(request: Request) {
+  const denied = await authorized();
+  if (denied) return denied;
+  const body: unknown = await request.json().catch(() => null);
+  const parsed = body as { business?: unknown; excludeKeywords?: unknown } | null;
+  const business = normalizeBusinessKey(await getBusinesses(), parsed?.business);
+  if (!business) return NextResponse.json({ error: "invalid_business" }, { status: 400 });
+  if (!Array.isArray(parsed?.excludeKeywords)) return NextResponse.json({ error: "invalid_keywords" }, { status: 400 });
+  const excludeKeywords = normalizeExcludeKeywords(parsed.excludeKeywords);
+  await prisma.industryBusiness.update({ where: { key: business }, data: { excludeKeywords } });
+  return NextResponse.json({ excludeKeywords });
 }

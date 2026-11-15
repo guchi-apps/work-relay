@@ -20,6 +20,7 @@ export default async function SettingsPage() {
     pendingInstruction: policies[def.key].pendingInstruction,
     scope: def.scope,
     feedQueries: def.feeds.map((feed) => feed.query),
+    excludeKeywords: def.excludeKeywords,
   }));
 
   return <section className="content"><Link className="breadcrumb" href="/dashboard">‹　業界ニュースへ戻る</Link><header className="page-header"><div><p className="eyebrow">SETTINGS</p><h1>設定</h1><p className="lead">アカウント情報の確認と、アプリの更新履歴をまとめて確認できます。</p></div></header>

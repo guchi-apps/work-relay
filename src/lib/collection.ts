@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { buildFeeds, getBusinesses, zeroCounts, type BusinessDef } from "@/lib/businesses";
+import { buildFeeds, getBusinesses, matchExcludeKeyword, zeroCounts, type BusinessDef } from "@/lib/businesses";
 import { decideDailyRunStatus, fitsNormalizedUrlColumn, MAX_SHORT_TEXT_LENGTH, normalizeUrl } from "@/lib/collection-rules";
 import { getWeekRange, weekCondition, toMergedSources, type MergedSource, type WeekRange } from "@/lib/industry-information";
 import { decideWeeklyCap, IMPORTANCE_RANK, type ImportanceValue, type PriorityFields } from "@/lib/triage";
@@ -452,6 +452,7 @@ function parseFeed(xml: string, feed: Feed, business: BusinessDef, targetFrom: D
     if (!fitsNormalizedUrlColumn(normalizedUrl)) return null;
     // RSSのタイトル・発表元は長さが不定なので、列幅（VARCHAR(191)）で切り詰める（#410）。
     const publisher = field(item, "source");
+    if (matchExcludeKeyword(business.excludeKeywords, title, publisher)) return null;
     return { business: feed.business, title: title.slice(0, MAX_SHORT_TEXT_LENGTH), url: normalizedUrl, sourceName: feed.name.slice(0, MAX_SHORT_TEXT_LENGTH), publisher: publisher ? publisher.slice(0, MAX_SHORT_TEXT_LENGTH) : null, publishedAt, isSupplemental: publishedAt < targetFrom, ...classify(title, business) };
   }).filter((item): item is Candidate => item !== null);
 }
