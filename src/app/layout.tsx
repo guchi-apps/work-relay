@@ -22,7 +22,14 @@ export const metadata: Metadata = {
   },
 };
 
-export const viewport: Viewport = { themeColor: "#087f78", viewportFit: "cover" };
+export const viewport: Viewport = {
+  // ダーク時はSafariのツールバー色も暗くする（#448。ページ背景`--paper`のダーク値に合わせる）
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#087f78" },
+    { media: "(prefers-color-scheme: dark)", color: "#0f1719" },
+  ],
+  viewportFit: "cover",
+};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
