@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 /**
  * 記事をまとめて採用／不採用にする（#94）。
  *
- * 新着記事画面のカードのボタン（1件）と、チェックした複数件をまとめて仕分けるバーの両方が
+ * 各画面のカードのボタン（1件ずつ。まとめて仕分けるバーは#449で削除した）が
  * ここを呼ぶ。本文は`{ articleIds: string[], decision: "adopt" | "reject", note?: string }`。
  * `note`は不採用理由等のメモ（任意）で、記事詳細画面の「メモ」欄（`reviewNote`）と共用する。
  * 認証はブラウザ→サーバー方向なのでSupabaseセッション（`getCurrentUser()`）。
