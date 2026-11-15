@@ -18,8 +18,9 @@ type Props = {
  * ままにしたいので、選択状態をReactのstateで持たず、送信時に`FormData`から読む。
  * バーはPC・iPadでは一覧の上に貼り付き、スマホでは画面下に固定する（`globals.css`）。
  *
- * **「✕ 不採用」は即送信せず、理由（任意・選択した全件に共通）を書ける欄をいったん開く**（#194）。
- * `TriageActions`と同じく`reviewNote`へ保存し、収集ジョブのプロンプト自動修正の参考にする。
+ * **採用・不採用は1タップで確定し、それぞれの右の「▾」から根拠（任意・選択した全件に共通）を
+ * 書いて送れる**（#451）。`TriageActions`と同じく`reviewNote`へ保存し、収集ジョブの
+ * プロンプト自動修正の参考にする。
  */
 export default function TriageInbox({ total, children }: Props) {
   const router = useRouter();
@@ -28,7 +29,7 @@ export default function TriageInbox({ total, children }: Props) {
   const [busy, setBusy] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [reasonOpen, setReasonOpen] = useState(false);
+  const [openFor, setOpenFor] = useState<TriageDecision | null>(null);
   const [reason, setReason] = useState("");
 
   function selectedIds(): string[] {
@@ -55,7 +56,7 @@ export default function TriageInbox({ total, children }: Props) {
       const response = await fetch("/api/articles/triage", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ articleIds, decision, ...(note ? { note } : {}) }) });
       if (response.ok) {
         toggleAll(false);
-        setReasonOpen(false);
+        setOpenFor(null);
         setReason("");
       } else {
         setError("保存できませんでした。しばらくしてからもう一度お試しください。");
@@ -68,6 +69,11 @@ export default function TriageInbox({ total, children }: Props) {
     startTransition(() => router.refresh());
   }
 
+  function toggleOption(decision: TriageDecision) {
+    setReason("");
+    setOpenFor((current) => (current === decision ? null : decision));
+  }
+
   const disabled = selected === 0 || busy || pending;
   return (
     <form ref={formRef} className="triage-form" onChange={recount} onSubmit={(event) => event.preventDefault()}>
@@ -78,16 +84,19 @@ export default function TriageInbox({ total, children }: Props) {
         </label>
         <span className={`count ${selected === 0 ? "dim" : ""}`}>{selected === 0 ? "チェックした記事をまとめて仕分けます" : `${selected}件を選択中`}</span>
         <span className="spacer" />
-        {reasonOpen ? (
+        <span className={`tri-split adopt ${openFor === "adopt" ? "open" : ""}`}>
+          <button className="btn adopt" type="button" disabled={disabled} onClick={() => void decide("adopt")}>✓ 採用</button>
+          <button className="btn adopt tri-more" type="button" disabled={disabled} aria-expanded={openFor === "adopt"} aria-label="採用の根拠を入力する" onClick={() => toggleOption("adopt")}>{openFor === "adopt" ? "▴" : "▾"}</button>
+        </span>
+        <span className={`tri-split reject ${openFor === "reject" ? "open" : ""}`}>
+          <button className="btn reject" type="button" disabled={disabled} onClick={() => void decide("reject")}>✕ 不採用</button>
+          <button className="btn reject tri-more" type="button" disabled={disabled} aria-expanded={openFor === "reject"} aria-label="不採用の根拠を入力する" onClick={() => toggleOption("reject")}>{openFor === "reject" ? "▴" : "▾"}</button>
+        </span>
+        {openFor && (
           <>
-            <input className="bulk-reason-input" type="text" maxLength={500} placeholder="不採用の理由（任意）" value={reason} disabled={disabled} onChange={(event) => setReason(event.target.value)} />
-            <button className="btn reject" type="button" disabled={disabled} onClick={() => void decide("reject", reason)}>不採用にする</button>
-            <button className="btn quiet" type="button" disabled={disabled} onClick={() => { setReasonOpen(false); setReason(""); }}>キャンセル</button>
-          </>
-        ) : (
-          <>
-            <button className="btn adopt" type="button" disabled={disabled} onClick={() => void decide("adopt")}>✓ 採用</button>
-            <button className="btn reject" type="button" disabled={disabled} onClick={() => setReasonOpen(true)}>✕ 不採用</button>
+            <input className="bulk-reason-input" type="text" maxLength={500} placeholder={`${openFor === "adopt" ? "採用" : "不採用"}の根拠（任意）`} value={reason} disabled={disabled} onChange={(event) => setReason(event.target.value)} />
+            <button className="btn adopt-send" type="button" disabled={disabled} onClick={() => void decide(openFor, reason)}>{openFor === "adopt" ? "採用" : "不採用"}として送信</button>
+            <button className="btn quiet" type="button" disabled={disabled} onClick={() => { setOpenFor(null); setReason(""); }}>キャンセル</button>
           </>
         )}
         {error && <span className="ai-error">{error}</span>}

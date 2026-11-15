@@ -51,7 +51,7 @@ function RecentCard({ item, businesses }: { item: IndustryInformationListItem; b
       <div className="news-head"><div><h3><ForeignTitleBadge title={item.title} />{item.title}</h3><p className="meta">{formatDate(item.publishedAt ?? item.occurredAt ?? item.collectedAt)}　·　{item.sourceName}　·　{item.isPrimarySource ? "一次情報" : "関連記事"}</p></div><span className={`badge ${item.importance === "HIGH" ? "high" : ""}`}>重要度 {importanceLabels[item.importance]}</span></div>
       <p className="summary">{summary ?? "要約は登録されていません。"}</p>
       <UntranslatedSummaryNote summary={summary} />
-      <ArticleAnalysisBlock item={item} businesses={businesses} />
+      <ArticleAnalysisBlock item={item} businesses={businesses} triageOnly />
       <div className="news-foot"><div className="tags">{item.targetCompany && <b>{item.targetCompany}</b>}{tags.map((tag) => <span key={tag}>{tag}</span>)}</div><a href={item.originalUrl} target="_blank" rel="noreferrer">元記事 ↗</a></div>
     </div>
   </article>;
