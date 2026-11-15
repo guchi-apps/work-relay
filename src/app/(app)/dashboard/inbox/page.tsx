@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import ArticleAnalysisBlock from "@/components/ArticleAnalysisBlock";
 import { ForeignTitleBadge, UntranslatedSummaryNote } from "@/components/ArticleLanguageMarks";
 import HeaderUserMenu from "@/components/HeaderUserMenu";
-import TriageInbox from "@/components/TriageInbox";
 import { getCurrentUser } from "@/lib/auth";
 import { businessLabel, getBusinesses, type BusinessDef } from "@/lib/businesses";
 import { pickDisplaySummary } from "@/lib/display-summary";
@@ -45,7 +44,6 @@ function RecentCard({ item, businesses }: { item: IndustryInformationListItem; b
   const hidden = state === "rejected" || state === "ai_rejected";
   const summary = pickDisplaySummary(item);
   return <article className={`news-card triage ${hidden ? "out-of-scope" : ""}`}>
-    <label className="pick"><input type="checkbox" name="ids" value={item.id} aria-label={`「${item.title}」を選択`} /></label>
     <div className="card-body">
       <div className="biz"><i className={color === "teal" ? "" : color} />{businessLabel(businesses, item.business)}</div>
       <div className="news-head"><div><h3><ForeignTitleBadge title={item.title} />{item.title}</h3><p className="meta">{formatDate(item.publishedAt ?? item.occurredAt ?? item.collectedAt)}　·　{item.sourceName}　·　{item.isPrimarySource ? "一次情報" : "関連記事"}</p></div><span className={`badge ${item.importance === "HIGH" ? "high" : ""}`}>重要度 {importanceLabels[item.importance]}</span></div>
@@ -75,9 +73,9 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
     <header className="page-header"><div><p className="eyebrow">LATEST UPDATES</p><h1>新着記事</h1><p className="lead">直近で収集した記事を新しい順に表示しています。関係ない記事は「不採用」で隠し、週報に載せたい記事は「採用」にします。</p></div><div className="top-actions"><HeaderUserMenu /></div></header>
     <nav className="triage-tabs" aria-label="仕分けの状態">{TRIAGE_PARAMS.map((param) => <Link key={param} className={param === triage ? "active" : ""} href={param === "pending" ? "/dashboard/inbox" : `/dashboard/inbox?triage=${param}`} aria-current={param === triage ? "page" : undefined}>{tabLabels[param]} <b>{counts[param]}</b></Link>)}</nav>
     <p className="triage-hint">{tabHints[triage]}</p>
-    {recent.length === 0 ? <div className="no-results">{emptyMessages[triage]}</div> : <TriageInbox total={recent.length}>
+    {recent.length === 0 ? <div className="no-results">{emptyMessages[triage]}</div> : <>
       {(["today", "yesterday", "earlier"] as const).map((label) => <DayGroup key={label} label={label} items={groups[label]} businesses={businesses} />)}
       <p className="bottom-link"><a href="/dashboard">すべての業界ニュースを見る　▦</a></p>
-    </TriageInbox>}
+    </>}
   </section>;
 }
