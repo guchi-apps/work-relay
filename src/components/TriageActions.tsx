@@ -1,5 +1,6 @@
 "use client";
 
+import { Check, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -68,10 +69,10 @@ export default function TriageActions({ articleId, state, showDetailLink = true 
   return (
     <span className="tri-actions">
       <button className={`btn adopt ${state === "adopted" ? "on" : ""}`} type="button" disabled={disabled} aria-pressed={state === "adopted"} onClick={() => void decide("adopt")}>
-        {state === "adopted" ? "✓ 採用済み" : "✓ 採用"}
+        <Check className="ic" aria-hidden="true" />{state === "adopted" ? "採用済み" : "採用"}
       </button>
       <button className={`btn reject ${state === "rejected" ? "on" : ""}`} type="button" disabled={disabled} aria-pressed={state === "rejected"} onClick={() => setReasonOpen(true)}>
-        {state === "rejected" ? "✕ 不採用済み" : "✕ 不採用"}
+        <X className="ic" aria-hidden="true" />{state === "rejected" ? "不採用済み" : "不採用"}
       </button>
       {showDetailLink && <Link className="btn quiet" href={`/dashboard/articles/${articleId}`}>詳細</Link>}
       {error && <span className="ai-error">{error}</span>}

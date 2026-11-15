@@ -1,5 +1,6 @@
 "use client";
 
+import { Check, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 import type { TriageDecision } from "@/lib/triage";
@@ -86,8 +87,8 @@ export default function TriageInbox({ total, children }: Props) {
           </>
         ) : (
           <>
-            <button className="btn adopt" type="button" disabled={disabled} onClick={() => void decide("adopt")}>✓ 採用</button>
-            <button className="btn reject" type="button" disabled={disabled} onClick={() => setReasonOpen(true)}>✕ 不採用</button>
+            <button className="btn adopt" type="button" disabled={disabled} onClick={() => void decide("adopt")}><Check className="ic" aria-hidden="true" />採用</button>
+            <button className="btn reject" type="button" disabled={disabled} onClick={() => setReasonOpen(true)}><X className="ic" aria-hidden="true" />不採用</button>
           </>
         )}
         {error && <span className="ai-error">{error}</span>}
