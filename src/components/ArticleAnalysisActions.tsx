@@ -58,7 +58,7 @@ export default function ArticleAnalysisActions({ articleId, status, triage, show
           <TriageActions articleId={articleId} state={triage} showDetailLink={false} />
         </>
       )}
-      {showDetailLink && <Link className="btn quiet" href={`/dashboard/articles/${articleId}`}>詳細を見る</Link>}
+      {showDetailLink && <Link className="btn quiet detail-link" href={`/dashboard/articles/${articleId}`}>詳細を見る</Link>}
       {error && <span className="ai-error">{error}</span>}
     </span>
   );
