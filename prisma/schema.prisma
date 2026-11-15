@@ -34,6 +34,7 @@ model IndustryBusiness {
   color         String   @default("teal") @db.VarChar(16)
   sortOrder     Int      @default(0)
   feeds         Json
+  excludeKeywords Json?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @default(now()) @updatedAt
 

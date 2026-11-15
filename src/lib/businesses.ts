@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { DEFAULT_BUSINESSES, sortBusinesses, type BusinessColor, type BusinessDef, type BusinessFeed } from "@/lib/business-defs";
+import { DEFAULT_BUSINESSES, normalizeExcludeKeywords, sortBusinesses, type BusinessColor, type BusinessDef, type BusinessFeed } from "@/lib/business-defs";
 
 export * from "@/lib/business-defs";
 
@@ -28,15 +28,18 @@ export async function getBusinesses(): Promise<BusinessDef[]> {
     color: (COLORS as string[]).includes(row.color) ? (row.color as BusinessColor) : "teal",
     sortOrder: row.sortOrder,
     feeds: toFeeds(row.feeds),
+    excludeKeywords: normalizeExcludeKeywords(row.excludeKeywords),
   })));
 }
 
 /** RSS収集で使う検索フィード（区分ごとのクエリをGoogleニュースのURLに展開したもの）。 */
-export function googleNewsRssUrl(query: string, lang: "ja" | "en"): string {
+export function googleNewsRssUrl(query: string, lang: "ja" | "en", excludeKeywords: readonly string[] = []): string {
+  // 除外語はGoogleニュース側でも`-"語"`で外す（取得後のタイトル照合と二重に効かせる）。
+  const full = [query, ...excludeKeywords.filter((word) => !word.includes('"')).map((word) => `-"${word}"`)].join(" ");
   const region = lang === "ja" ? "hl=ja&gl=JP&ceid=JP:ja" : "hl=en&gl=US&ceid=US:en";
-  return `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&${region}`;
+  return `https://news.google.com/rss/search?q=${encodeURIComponent(full)}&${region}`;
 }
 
 export function buildFeeds(defs: readonly BusinessDef[]) {
-  return defs.flatMap((def) => def.feeds.map((feed) => ({ business: def.key, ...feed, url: googleNewsRssUrl(feed.query, feed.lang) })));
+  return defs.flatMap((def) => def.feeds.map((feed) => ({ business: def.key, ...feed, url: googleNewsRssUrl(feed.query, feed.lang, def.excludeKeywords) })));
 }

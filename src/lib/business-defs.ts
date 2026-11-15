@@ -26,7 +26,26 @@ export type BusinessDef = {
   color: BusinessColor;
   sortOrder: number;
   feeds: BusinessFeed[];
+  /** 収集から外す語（タイトル・発表元に含まれる記事は登録しない）。 */
+  excludeKeywords: string[];
 };
+
+/**
+ * エクステリア事業の除外語の初期値（#452）。「ポスト」は郵便ポスト以外の意味が多いため、
+ * 意味の種類ごとに並べている。マイグレーション`industry_business_exclude_keywords`の初期値と同じ内容。
+ */
+export const EXTERIOR_EXCLUDE_KEYWORDS = [
+  // 野球・スポーツ
+  "ポストシーズン",
+  // 役職・人事
+  "ポストを巡る", "後任ポスト", "要職ポスト",
+  // はがき
+  "ポストはがき", "ポスト葉書",
+  // SNS（Xの投稿）
+  "Xのポスト", "ポストした",
+  // 時代区分
+  "ポストコロナ",
+];
 
 const POLICY_TAIL = "について、商品企画、市場、導入、制度、安全性に役立つ一次情報を優先する。話題の背景に出るだけの記事、人事・芸能・スポーツなど事業と直接関係しない記事は採用しない。";
 
@@ -41,7 +60,8 @@ export const DEFAULT_BUSINESSES: BusinessDef[] = [
     defaultPolicy: `宅配ボックス・ポスト・機能門柱${POLICY_TAIL}`,
     color: "teal",
     sortOrder: 1,
-    feeds: [{ name: "宅配・住宅設備の公開情報", query: "(宅配ボックス OR ポスト OR 機能門柱 OR 置き配) (新商品 OR 発表 OR 導入 OR 補助金)", lang: "ja" }],
+    feeds: [{ name: "宅配・住宅設備の公開情報", query: "(宅配ボックス OR 郵便ポスト OR 宅配ポスト OR 集合ポスト OR 玄関ポスト OR 機能門柱 OR 置き配) (新商品 OR 発表 OR 導入 OR 補助金)", lang: "ja" }],
+    excludeKeywords: EXTERIOR_EXCLUDE_KEYWORDS,
   },
   {
     key: "LOCKER",
@@ -56,6 +76,7 @@ export const DEFAULT_BUSINESSES: BusinessDef[] = [
       { name: "ロッカー・発送サービスの公開情報", query: "(PUDO OR SMARI OR Amazon Hub OR マルチエキューブ OR SPACER OR セルフ発送) (導入 OR 発表 OR 物流 OR 返品)", lang: "ja" },
       { name: "海外ロッカー事例", query: "(parcel locker OR locker drop-off OR self-service shipping kiosk)", lang: "en" },
     ],
+    excludeKeywords: [],
   },
   {
     key: "AI",
@@ -70,8 +91,35 @@ export const DEFAULT_BUSINESSES: BusinessDef[] = [
       { name: "Gemini・Copilotの公開情報", query: "(Gemini OR Copilot OR \"Microsoft 365 Copilot\" OR \"GitHub Copilot\") (新機能 OR アップデート OR 活用事例)", lang: "ja" },
       { name: "Gemini・Copilotの海外情報", query: "(Gemini OR \"Microsoft Copilot\" OR \"GitHub Copilot\") (new feature OR launches OR rollout OR use case)", lang: "en" },
     ],
+    excludeKeywords: [],
   },
 ];
+
+function normalizeForMatch(text: string): string {
+  return text.normalize("NFKC").toLowerCase();
+}
+
+/** 除外語の入力を整える。前後の空白・空文字・重複・長すぎる語を落とす。 */
+export function normalizeExcludeKeywords(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string") continue;
+    const word = item.trim().slice(0, 50);
+    const key = normalizeForMatch(word);
+    if (word === "" || seen.has(key)) continue;
+    seen.add(key);
+    result.push(word);
+  }
+  return result.slice(0, 100);
+}
+
+/** 除外語に当たる記事か。全角半角・大文字小文字を区別せず、部分一致で判定する。 */
+export function matchExcludeKeyword(excludeKeywords: readonly string[], ...texts: (string | null | undefined)[]): string | null {
+  const haystack = normalizeForMatch(texts.filter((text): text is string => !!text).join("\n"));
+  return excludeKeywords.find((word) => word.trim() !== "" && haystack.includes(normalizeForMatch(word.trim()))) ?? null;
+}
 
 export function businessKeys(defs: readonly BusinessDef[]): BusinessKey[] {
   return [...defs].sort((a, b) => a.sortOrder - b.sortOrder).map((def) => def.key);

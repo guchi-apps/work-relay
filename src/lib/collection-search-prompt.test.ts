@@ -11,6 +11,7 @@ import {
   COLLECTED_INFORMATION_TYPES,
   parseCollectionSearchPayload,
 } from "./collection-search-prompt.ts";
+import { DEFAULT_BUSINESSES, matchExcludeKeyword } from "./business-defs.ts";
 
 // JSTで2026-09-21 12:00
 const NOW = new Date("2026-09-21T03:00:00Z");
@@ -262,5 +263,27 @@ describe("parseCollectionSearchPayload", () => {
     assert.equal(result.ok, true);
     if (!result.ok) return;
     assert.equal(result.articles.length, articleLimitFor("AI"));
+  });
+});
+
+describe("除外キーワード（#452）", () => {
+  const exterior = { ...DEFAULT_BUSINESSES[0], excludeKeywords: ["ポストシーズン", "ポストはがき"] };
+  const businesses = [exterior, ...DEFAULT_BUSINESSES.slice(1)];
+
+  it("プロンプトに除外語が載る", () => {
+    const prompt = buildCollectionSearchPrompt(NOW, undefined, businesses);
+    assert.match(prompt, /ポストシーズン、ポストはがき/);
+  });
+
+  it("除外語に当たる記事は取り込まず、全件が当たっても失敗にしない", () => {
+    const result = parseCollectionSearchPayload({ articles: [article({ title: "大谷翔平 ポストシーズンの結果" })] }, businesses);
+    assert.equal(result.ok, true);
+    if (result.ok) assert.equal(result.articles.length, 0);
+  });
+
+  it("除外語に当たらない記事は残り、全角半角の違いは区別しない", () => {
+    const result = parseCollectionSearchPayload({ articles: [article({ title: "ポストはがきの値上げ" }), article({ url: "https://example.com/news/2" })] }, businesses);
+    assert.equal(result.ok && result.articles.length, 1);
+    assert.equal(matchExcludeKeyword(["Ｘのポスト"], "xのポストで話題"), "Ｘのポスト");
   });
 });

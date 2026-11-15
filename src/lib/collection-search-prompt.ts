@@ -16,7 +16,7 @@
  */
 
 // `@/`のエイリアスは`node --test`の実行時には解決されないため、相対パス＋拡張子で書く。
-import { DEFAULT_BUSINESSES, businessKeys, sortBusinesses, type BusinessDef } from "./business-defs.ts";
+import { DEFAULT_BUSINESSES, businessKeys, matchExcludeKeyword, sortBusinesses, type BusinessDef } from "./business-defs.ts";
 import { MAX_SHORT_TEXT_LENGTH } from "./collection-rules.ts";
 import { formatIsoDate } from "./jst-week.ts";
 
@@ -145,6 +145,12 @@ export function buildCollectionSearchPrompt(now: Date, context?: CollectionSearc
     "- 公式発表・行政・企業のニュースリリースなど一次情報を優先し、その記事の isPrimarySource を true にします。転載・解説記事しか見つからないときは false にし、可能なら元の発表元を publisher・targetCompany に入れてください。",
     "- 同じ発表を報じた複数の記事は1件にまとめ、最も原典に近いものを選びます。",
     "- 語句が一致するだけで、各区分の話題が背景や小道具としてしか出てこない記事（芸能・スポーツ・事件など）は選ばないでください。",
+    ...(defs.some((def) => def.excludeKeywords.length > 0)
+      ? [
+          "- 検索語が別の意味で使われている記事は選びません。たとえば「ポスト」は、野球のポストシーズン・役職や人事のポスト・ポストはがき・SNSの投稿（Xのポスト）ではなく、郵便受けとしてのポストだけを対象にします。",
+          ...defs.filter((def) => def.excludeKeywords.length > 0).map((def) => `- ${def.label}では、タイトルや発表元に次の語を含む記事は選びません: ${def.excludeKeywords.join("、")}`),
+        ]
+      : []),
     "",
     ...(defs.some((def) => def.key === "AI")
       ? [
@@ -400,9 +406,16 @@ export function parseCollectionSearchPayload(raw: unknown, businesses: BusinessD
   const found = raw.articles.length;
   const perBusiness: Record<string, number> = Object.fromEntries(keys.map((key) => [key, 0]));
   const articles: CollectedArticle[] = [];
+  let keywordExcluded = 0;
   for (const item of raw.articles) {
     const article = toArticle(item, keys);
     if (!article) continue;
+    // 除外語に当たる記事は、AIが選んでしまっても取り込まない。読めない記事とは区別する
+    // （全件が除外語に当たっただけの実行を、出力の形の破損と取り違えて失敗にしない）。
+    if (matchExcludeKeyword(businesses.find((def) => def.key === article.business)?.excludeKeywords ?? [], article.title, article.publisher)) {
+      keywordExcluded++;
+      continue;
+    }
     if (articles.length >= COLLECTION_SEARCH_ARTICLE_LIMIT || perBusiness[article.business] >= articleLimitFor(article.business)) continue;
     perBusiness[article.business]++;
     articles.push(article);
@@ -416,7 +429,7 @@ export function parseCollectionSearchPayload(raw: unknown, businesses: BusinessD
       if (business && policy) nextPolicies[business] = policy;
     }
   }
-  if (found > 0 && articles.length === 0) return { ok: false, error: "返ってきた記事がどれも読み取れませんでした" };
+  if (found > 0 && articles.length === 0 && keywordExcluded === 0) return { ok: false, error: "返ってきた記事がどれも読み取れませんでした" };
   return {
     ok: true,
     articles,
