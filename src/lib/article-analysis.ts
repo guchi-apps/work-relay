@@ -290,13 +290,16 @@ export async function setWeeklyCandidate(articleId: string, weeklyCandidate: boo
  * 押し忘れたまま週報を作ってしまう手戻りを防ぐ。既に解析済み・実行中・失敗済みの記事は対象外
  * （再解析は引き続き手動の「再解析」ボタンから行う）。
  *
- * **`note`（任意）は記事詳細画面の「メモ」欄（`reviewNote`）と共用する**（#194）。不採用の理由を
+ * **`note`（任意）は記事詳細画面の「メモ」欄（`reviewNote`）と共用する**（#194）。採用・不採用の根拠（#451）を
  * 書けるようにし、収集ジョブ（`claimCollectionSearchJobs()`）が次回のプロンプトへ渡す材料にする。
- * `null`のときは既存のメモを上書きしない。
+ * `null`のときは、判定が反転する記事（採用済み→不採用、不採用→採用）に限り前回の判定の根拠を消す
+ * （#451。採用の根拠が、根拠なしの不採用のあとも「不採用理由」として収集プロンプトへ渡るのを防ぐ）。
+ * 判定が変わらない記事の既存のメモは上書きしない。
  */
 export async function setTriageDecision(articleIds: string[], adopt: boolean, reviewedBy: string, note: string | null = null, now = new Date()): Promise<number> {
   if (articleIds.length === 0) return 0;
   const unanalyzed = adopt ? (await prisma.industryInformation.findMany({ where: { id: { in: articleIds }, analysisStatus: null }, select: { id: true } })).map((row) => row.id) : [];
+  if (note === null) await prisma.industryInformation.updateMany({ where: { id: { in: articleIds }, reviewedAt: { not: null }, weeklyCandidate: !adopt, reviewNote: { not: null } }, data: { reviewNote: null } });
   const updated = await prisma.industryInformation.updateMany({ where: { id: { in: articleIds } }, data: { weeklyCandidate: adopt, reviewedAt: now, reviewedBy, ...(note !== null ? { reviewNote: note } : {}) } });
   for (const articleId of unanalyzed) await enqueueAnalysisJob(articleId, reviewedBy);
   return updated.count;
