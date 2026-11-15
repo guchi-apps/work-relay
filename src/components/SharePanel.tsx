@@ -1,5 +1,6 @@
 "use client";
 
+import { Check } from "lucide-react";
 import type { BusinessDef } from "@/lib/business-defs";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -134,7 +135,7 @@ export default function SharePanel({ businesses, url, text, defaultTitle, existi
       <div className="share-card">
         {created ? (
           <div className="success-banner">
-            <div className="dot">✓</div>
+            <div className="dot"><Check className="ic" aria-hidden="true" /></div>
             <div>
               <p>新着記事に追加しました</p>
               <small>AI解析を待っています。解析前でも、登録時の要約でメールに送れます</small>
@@ -181,7 +182,7 @@ export default function SharePanel({ businesses, url, text, defaultTitle, existi
           ))}
         </div>
       </div>
-      {error && <p className="helper" style={{ color: "#b8541c" }}>{error}</p>}
+      {error && <p className="helper" style={{ color: "var(--warn)" }}>{error}</p>}
       <div className="share-actions">
         <button type="button" className="cta full big" disabled={!canSubmit} onClick={() => submit("add")}>{busy === "add" ? "追加中…" : "新着記事に追加する"}</button>
         <button type="button" className="cta ghost full big" disabled={!canSubmit} onClick={() => submit("add_send")}>{busy === "add_send" ? "追加中…" : "追加して、メールで送る"}</button>

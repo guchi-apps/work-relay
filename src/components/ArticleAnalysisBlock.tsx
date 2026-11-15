@@ -17,11 +17,14 @@ export default function ArticleAnalysisBlock({
   item,
   businesses,
   hideActionsWhenAdopted = false,
+  triageOnly = false,
 }: {
   item: IndustryInformationListItem;
   businesses: BusinessDef[];
   /** 採用済みの記事で再解析・採用／不採用ボタンを隠す（#395）。仕分け画面（新着記事）では使わない。 */
   hideActionsWhenAdopted?: boolean;
+  /** 新着記事の確認画面用。AI解析・メールで送るを出さず、採用／不採用と詳細だけにする（#451）。 */
+  triageOnly?: boolean;
 }) {
   const job = item.analysisJobs[0] ?? null;
   const analysis = item.analyses[0] ?? null;
@@ -46,8 +49,8 @@ export default function ArticleAnalysisBlock({
         {analysis && <span className="conf">信頼度 {formatConfidence(analysis.confidence)}</span>}
         {analysis && <span className={`by ${reviewed ? "human" : "ai"}`}>{reviewed ? "人が確定" : "AI判定"}</span>}
         <span className={`chip ${TRIAGE_CLASS[triage]}`}>{TRIAGE_LABELS[triage]}</span>
-        <ArticleAnalysisActions articleId={item.id} status={status} triage={triage} hideActions={hideActionsWhenAdopted && triage === "adopted"} />
-        <ArticleMailButton article={toNewsMailArticleDto(item)} businesses={businesses} />
+        <ArticleAnalysisActions articleId={item.id} status={status} triage={triage} hideActions={hideActionsWhenAdopted && triage === "adopted"} triageOnly={triageOnly} />
+        {!triageOnly && <ArticleMailButton article={toNewsMailArticleDto(item)} businesses={businesses} />}
       </div>
       {analysis && <p className="ai-reason">判定理由: {analysis.relevance === "OUT_OF_SCOPE" ? (analysis.noiseReason ?? analysis.reason) : analysis.reason}</p>}
       {job && (status === "FAILED" || status === "AUTH_REQUIRED") && (

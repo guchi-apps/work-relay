@@ -351,9 +351,15 @@ AIDE経由の週報登録（`importWeeklyReport()`）と自動収集（`runDaily
 新着記事画面（`/dashboard/inbox`。#124以前は`/`）は#42では直近10件を眺めるだけの画面だったが、無関係な記事（検索語
 「ポスト」に当たった政治記事、「置き配」が題材のドラマ等）が混ざるため、#94で**仕分けの
 受け皿**にした。タブ「未判定／採用／不採用／すべて」（既定は未判定）、カードごとの
-「採用」「不採用」ボタン（`src/components/TriageActions.tsx`）、左のチェックとまとめて仕分ける
-バー（`src/components/TriageInbox.tsx`）を持つ。保存先はどちらも`POST /api/articles/triage`
-（`{ articleIds: string[], decision: "adopt" | "reject" }`、Supabaseセッション認証）。
+「採用」「不採用」ボタン（`src/components/TriageActions.tsx`）を持つ（左のチェックとまとめて仕分ける
+バーは#449で削除した）。保存先は`POST /api/articles/triage`
+（`{ articleIds: string[], decision: "adopt" | "reject", note?: string }`、Supabaseセッション認証）。
+**採用・不採用は1タップで確定し、それぞれの右の「▾」（スプリットボタン）を押したときだけ根拠（任意）の
+入力欄が開く**（#451。#194は不採用で理由欄が必ず開く作りだった）。新着記事画面のカードは「AI解析」
+「メールで送る」を出さず（`ArticleAnalysisBlock`の`triageOnly`）、採用・不採用・詳細だけにした
+（AI解析・メールは記事詳細画面から行う）。根拠は`reviewNote`に保存され、判定が反転する記事を
+根拠なしで仕分けたときは前回の根拠を消す（`setTriageDecision()`。採用時の根拠が不採用理由として
+収集プロンプトへ渡らないようにするため）。
 
 - **仕分けの状態は専用の列を持たず、#79の`weeklyCandidate`と`reviewedAt`から導出する**
   （`src/lib/triage.ts`の`getTriageState()`）。未判定＝`reviewedAt`が`null`、採用＝人が判断して
@@ -377,16 +383,11 @@ AIDE経由の週報登録（`importWeeklyReport()`）と自動収集（`runDaily
 - RSSの検索語（`FEEDS`）は変えていない。「広め」は上限の緩和によるもので、検索語の拡張は
   別Issueで検討する。AIDE経由の週報登録の入力上限（1回10件・各事業5件）はAIDE側との契約なので
   そのまま
-- カード側のチェックは`<input type="checkbox" name="ids">`のままサーバーで描画し、
-  `TriageInbox`（クライアント）の`<form onChange>`にバブルしてくる`change`で件数を数え直す。
-  選択状態をReactのstateで持たないのは、カードをサーバーコンポーネントのまま保つため。
-  チェック中のカードの強調は`.news-card.triage:has(.pick input:checked)`（CSSのみ）
 - **「✓ 採用」ボタンで採用した記事のうち、まだ一度もAI解析していないもの（`analysisStatus`が
   `null`）は、`setTriageDecision()`（`src/lib/article-analysis.ts`）が自動で解析ジョブも積む**
   （#154）。採用した記事は週報の材料として扱われるため、「AI解析」ボタンを押し忘れたまま
   週報を作る手戻りを防ぐ。既に解析済み・実行中・失敗済みの記事は対象外（再解析は従来どおり
-  手動の「再解析」ボタン）。「✓ 採用」ボタン（`TriageActions`）は新着記事画面
-  （1件・まとめての両方）だけでなく、業界ニュース画面（`/dashboard`。`ArticleAnalysisBlock`が
+  手動の「再解析」ボタン）。「✓ 採用」ボタン（`TriageActions`）は新着記事画面だけでなく、業界ニュース画面（`/dashboard`。`ArticleAnalysisBlock`が
   `ArticleAnalysisActions`経由で内包）・記事詳細画面にも出ており、どれも同じ
   `POST /api/articles/triage`を経由するため、共通の保存関数に判定を寄せている。記事詳細
   画面の「人による確定」フォーム（`AnalysisReviewForm`）経由の採用（`applyHumanReview()`）は

@@ -1,5 +1,6 @@
 "use client";
 
+import { Check, Inbox, Camera, ImagePlus, Info } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { formatPartSuffix } from "@/lib/image-mail-split";
 import { createThumbnailUrl, readNetworkHint, shouldSkipThumbnails } from "@/lib/image-mail-thumbnail";
@@ -247,7 +248,7 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
     {shareNotice && (
       shareNotice.kind === "received" ? (
         <div className="share-received" role="status">
-          <span className="share-received-mark" aria-hidden="true">📥</span>
+          <span className="share-received-mark" aria-hidden="true"><Inbox className="ic" aria-hidden="true" /></span>
           <div>
             <p>共有から写真を{shareNotice.count}枚受け取りました</p>
             <small>受け取った写真はサーバーの一時領域から消しました</small>
@@ -279,9 +280,9 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
       <div className="imgmail-block">
         <div className="imgmail-block-head"><h2>写真</h2><span>{images.length}枚選択中</span></div>
         <div className="imgmail-add">
-          <button type="button" className="cta" disabled={loadingPhotos} onClick={() => captureInputRef.current?.click()}>📷　写真を撮る</button>
+          <button type="button" className="cta" disabled={loadingPhotos} onClick={() => captureInputRef.current?.click()}><Camera className="ic" aria-hidden="true" />写真を撮る</button>
           <button type="button" className="cta ghost" disabled={loadingPhotos} onClick={() => pickInputRef.current?.click()}>
-            {loadingPhotos ? <><i className="spin" aria-hidden="true" />読み込み中…</> : "🖼　写真を追加"}
+            {loadingPhotos ? <><i className="spin" aria-hidden="true" />読み込み中…</> : <><ImagePlus className="ic" aria-hidden="true" />写真を追加</>}
           </button>
         </div>
         {loadingPhotos && (
@@ -327,7 +328,7 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
 
       <button type="button" className="cta full big" disabled={!canBuild} onClick={handleBuild}>{building ? "作成中…" : "ZIPを作成する"}</button>
 
-      {buildError && <p className="helper" style={{ color: "#b8541c" }}>{buildError}</p>}
+      {buildError && <p className="helper" style={{ color: "var(--warn)" }}>{buildError}</p>}
 
       {buildResult && (
         <div className="result-card">
@@ -336,7 +337,7 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
             <div><small>短辺</small><p>{buildResult.width}px</p></div>
             <div><small>通数</small><p>{partCount}通</p></div>
           </div>
-          {partCount > 1 && <div className="result-note">ℹ️　合計が3MBを超えるため、{partCount}通に分けました。1通ずつ順に送信します。</div>}
+          {partCount > 1 && <div className="result-note"><Info className="ic" aria-hidden="true" />合計が3MBを超えるため、{partCount}通に分けました。1通ずつ順に送信します。</div>}
           {partCount > 1 && (
             <div className="parts">
               {buildResult.parts.map((part, index) => (
@@ -359,7 +360,7 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
         sendResult.ok ? (
           <>
             <div className="success-banner">
-              <div className="dot">✓</div>
+              <div className="dot"><Check className="ic" aria-hidden="true" /></div>
               <div>
                 <p>{partCount > 1 ? `${partCount}通すべて送信しました。` : "送信しました。"}Gmailで受信を確認してください。</p>
               </div>
@@ -367,9 +368,9 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
             <button type="button" className="cta ghost full" onClick={resetAll}>次の写真を送る（入力をクリア）</button>
           </>
         ) : (
-          <div className="success-banner" style={{ background: "#fdece0", borderColor: "#f0c39a" }}>
-            <div className="dot" style={{ background: "#b8541c" }}>!</div>
-            <div><p style={{ color: "#8a3a12" }}>{sendResult.message}</p></div>
+          <div className="success-banner error">
+            <div className="dot">!</div>
+            <div><p>{sendResult.message}</p></div>
           </div>
         )
       )}

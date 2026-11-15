@@ -1,5 +1,6 @@
 "use client";
 
+import { Mail, X, Check } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { BusinessDef } from "@/lib/business-defs";
 import {
@@ -34,7 +35,7 @@ export default function ArticleMailButton({ article, businesses, defaultOpen = f
   return (
     <>
       <button type="button" className="btn-mail" onClick={() => setOpen(true)}>
-        ✉ メールで送る
+        <Mail className="ic" aria-hidden="true" />メールで送る
       </button>
       {open && <MailSheet article={article} businesses={businesses} onClose={() => setOpen(false)} />}
     </>
@@ -100,7 +101,7 @@ function MailSheet({ article, businesses, onClose }: { article: NewsMailArticleD
         <div className="mail-sheet-head">
           <h2>この記事をメールで送る</h2>
           <button ref={closeRef} type="button" className="btn" onClick={onClose}>
-            ✕ 閉じる
+            <X className="ic" aria-hidden="true" />閉じる
           </button>
         </div>
 
@@ -154,7 +155,7 @@ function MailSheet({ article, businesses, onClose }: { article: NewsMailArticleD
         {result &&
           (result.ok ? (
             <div className="success-banner">
-              <div className="dot">✓</div>
+              <div className="dot"><Check className="ic" aria-hidden="true" /></div>
               <div>
                 <p>送信しました。Gmailで受信を確認してください。</p>
               </div>
