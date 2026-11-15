@@ -182,7 +182,7 @@ export default function SharePanel({ businesses, url, text, defaultTitle, existi
           ))}
         </div>
       </div>
-      {error && <p className="helper" style={{ color: "#b8541c" }}>{error}</p>}
+      {error && <p className="helper" style={{ color: "var(--warn)" }}>{error}</p>}
       <div className="share-actions">
         <button type="button" className="cta full big" disabled={!canSubmit} onClick={() => submit("add")}>{busy === "add" ? "追加中…" : "新着記事に追加する"}</button>
         <button type="button" className="cta ghost full big" disabled={!canSubmit} onClick={() => submit("add_send")}>{busy === "add_send" ? "追加中…" : "追加して、メールで送る"}</button>

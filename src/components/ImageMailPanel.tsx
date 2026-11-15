@@ -328,7 +328,7 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
 
       <button type="button" className="cta full big" disabled={!canBuild} onClick={handleBuild}>{building ? "作成中…" : "ZIPを作成する"}</button>
 
-      {buildError && <p className="helper" style={{ color: "#b8541c" }}>{buildError}</p>}
+      {buildError && <p className="helper" style={{ color: "var(--warn)" }}>{buildError}</p>}
 
       {buildResult && (
         <div className="result-card">
@@ -368,9 +368,9 @@ export default function ImageMailPanel({ sharedId, shareError }: Props) {
             <button type="button" className="cta ghost full" onClick={resetAll}>次の写真を送る（入力をクリア）</button>
           </>
         ) : (
-          <div className="success-banner" style={{ background: "#fdece0", borderColor: "#f0c39a" }}>
-            <div className="dot" style={{ background: "#b8541c" }}>!</div>
-            <div><p style={{ color: "#8a3a12" }}>{sendResult.message}</p></div>
+          <div className="success-banner error">
+            <div className="dot">!</div>
+            <div><p>{sendResult.message}</p></div>
           </div>
         )
       )}
