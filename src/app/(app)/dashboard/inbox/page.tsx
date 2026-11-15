@@ -1,3 +1,4 @@
+import { ExternalLink, LayoutGrid } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import ArticleAnalysisBlock from "@/components/ArticleAnalysisBlock";
@@ -50,7 +51,7 @@ function RecentCard({ item, businesses }: { item: IndustryInformationListItem; b
       <p className="summary">{summary ?? "要約は登録されていません。"}</p>
       <UntranslatedSummaryNote summary={summary} />
       <ArticleAnalysisBlock item={item} businesses={businesses} triageOnly />
-      <div className="news-foot"><div className="tags">{item.targetCompany && <b>{item.targetCompany}</b>}{tags.map((tag) => <span key={tag}>{tag}</span>)}</div><a href={item.originalUrl} target="_blank" rel="noreferrer">元記事 ↗</a></div>
+      <div className="news-foot"><div className="tags">{item.targetCompany && <b>{item.targetCompany}</b>}{tags.map((tag) => <span key={tag}>{tag}</span>)}</div><a href={item.originalUrl} target="_blank" rel="noreferrer">元記事 <ExternalLink className="ic" aria-hidden="true" /></a></div>
     </div>
   </article>;
 }
@@ -75,7 +76,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
     <p className="triage-hint">{tabHints[triage]}</p>
     {recent.length === 0 ? <div className="no-results">{emptyMessages[triage]}</div> : <>
       {(["today", "yesterday", "earlier"] as const).map((label) => <DayGroup key={label} label={label} items={groups[label]} businesses={businesses} />)}
-      <p className="bottom-link"><a href="/dashboard">すべての業界ニュースを見る　▦</a></p>
+      <p className="bottom-link"><a href="/dashboard">すべての業界ニュースを見る　<LayoutGrid className="ic" aria-hidden="true" /></a></p>
     </>}
   </section>;
 }

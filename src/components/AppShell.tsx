@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Camera, Menu, NotebookPen, Settings, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { BrandLogo } from "@/components/BrandMark";
 import SidebarNav from "@/components/SidebarNav";
@@ -132,13 +133,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* スマホ専用の固定バー。PC・iPadではglobals.cssで非表示にする。 */}
       <div className="mobile-bar">
         <button type="button" className="menu-btn" aria-expanded={open} aria-label={open ? "メニューを閉じる" : "メニューを開く"} onClick={() => setOpen((current) => !current)}>
-          {open ? "✕" : "☰"}
+          {open ? <X className="ic" aria-hidden="true" /> : <Menu className="ic" aria-hidden="true" />}
         </button>
         <BrandLogo tone="light" className="mobile-brand" />
         <span className="mobile-bar-spacer" />
-        {pathname !== IMAGE_MAIL_PATH && <Link className="icon-btn" href={IMAGE_MAIL_PATH} aria-label="画像を社用メールに送る" onClick={() => setOpen(false)}>📷</Link>}
-        {pathname !== MEMO_PATH && <Link className="icon-btn" href={MEMO_PATH} aria-label="メモを社用メールに送る" onClick={() => setOpen(false)}>📝</Link>}
-        {pathname !== SETTINGS_PATH && <Link className="icon-btn" href={SETTINGS_PATH} aria-label="設定" onClick={() => setOpen(false)}>⚙</Link>}
+        {pathname !== IMAGE_MAIL_PATH && <Link className="icon-btn" href={IMAGE_MAIL_PATH} aria-label="画像を社用メールに送る" onClick={() => setOpen(false)}><Camera className="ic" aria-hidden="true" /></Link>}
+        {pathname !== MEMO_PATH && <Link className="icon-btn" href={MEMO_PATH} aria-label="メモを社用メールに送る" onClick={() => setOpen(false)}><NotebookPen className="ic" aria-hidden="true" /></Link>}
+        {pathname !== SETTINGS_PATH && <Link className="icon-btn" href={SETTINGS_PATH} aria-label="設定" onClick={() => setOpen(false)}><Settings className="ic" aria-hidden="true" /></Link>}
       </div>
       <aside className="sidebar" onClick={closeIfLinkClicked}>
         <div className="brand">

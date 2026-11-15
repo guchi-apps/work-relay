@@ -1,5 +1,6 @@
 "use client";
 
+import { Check } from "lucide-react";
 import { useRef, useState } from "react";
 import { SHARE_TEXT_QUERY_MAX_LENGTH } from "@/lib/share-inbox";
 import { buildTextMailHtml, MAX_SUBJECT_BODY_LENGTH, MAX_TEXT_LENGTH } from "@/lib/text-mail";
@@ -150,7 +151,7 @@ export default function TextMailBlock({ text: initialText, defaultSubjectBody = 
       {result &&
         (result.ok ? (
           <div className="success-banner">
-            <div className="dot">✓</div>
+            <div className="dot"><Check className="ic" aria-hidden="true" /></div>
             <div>
               <p>送信しました。Gmailで受信を確認してください。</p>
             </div>

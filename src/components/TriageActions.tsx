@@ -1,5 +1,6 @@
 "use client";
 
+import { Check, ChevronDown, ChevronUp, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -63,15 +64,15 @@ export default function TriageActions({ articleId, state, showDetailLink = true 
     <span className="tri-actions">
       <span className={`tri-split adopt ${openFor === "adopt" ? "open" : ""}`}>
         <button className={`btn adopt ${state === "adopted" ? "on" : ""}`} type="button" disabled={disabled} aria-pressed={state === "adopted"} onClick={() => void decide("adopt")}>
-          {state === "adopted" ? "✓ 採用済み" : "✓ 採用"}
+          <Check className="ic" aria-hidden="true" />{state === "adopted" ? "採用済み" : "採用"}
         </button>
-        <button className={`btn adopt tri-more ${state === "adopted" ? "on" : ""}`} type="button" disabled={disabled} aria-expanded={openFor === "adopt"} aria-label="採用の根拠を入力する" onClick={() => toggleOption("adopt")}>{openFor === "adopt" ? "▴" : "▾"}</button>
+        <button className={`btn adopt tri-more ${state === "adopted" ? "on" : ""}`} type="button" disabled={disabled} aria-expanded={openFor === "adopt"} aria-label="採用の根拠を入力する" onClick={() => toggleOption("adopt")}>{openFor === "adopt" ? <ChevronUp className="ic" aria-hidden="true" /> : <ChevronDown className="ic" aria-hidden="true" />}</button>
       </span>
       <span className={`tri-split reject ${openFor === "reject" ? "open" : ""}`}>
         <button className={`btn reject ${state === "rejected" ? "on" : ""}`} type="button" disabled={disabled} aria-pressed={state === "rejected"} onClick={() => void decide("reject")}>
-          {state === "rejected" ? "✕ 不採用済み" : "✕ 不採用"}
+          <X className="ic" aria-hidden="true" />{state === "rejected" ? "不採用済み" : "不採用"}
         </button>
-        <button className={`btn reject tri-more ${state === "rejected" ? "on" : ""}`} type="button" disabled={disabled} aria-expanded={openFor === "reject"} aria-label="不採用の根拠を入力する" onClick={() => toggleOption("reject")}>{openFor === "reject" ? "▴" : "▾"}</button>
+        <button className={`btn reject tri-more ${state === "rejected" ? "on" : ""}`} type="button" disabled={disabled} aria-expanded={openFor === "reject"} aria-label="不採用の根拠を入力する" onClick={() => toggleOption("reject")}>{openFor === "reject" ? <ChevronUp className="ic" aria-hidden="true" /> : <ChevronDown className="ic" aria-hidden="true" />}</button>
       </span>
       {showDetailLink && <Link className="btn quiet" href={`/dashboard/articles/${articleId}`}>詳細</Link>}
       {openFor && (

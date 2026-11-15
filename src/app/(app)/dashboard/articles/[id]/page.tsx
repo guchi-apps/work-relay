@@ -1,3 +1,4 @@
+import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import AnalysisReviewForm from "@/components/AnalysisReviewForm";
@@ -53,7 +54,7 @@ export default async function ArticleDetailPage({ params, searchParams }: { para
       <div>
         <p className="eyebrow">ARTICLE</p>
         <h1>{article.title}</h1>
-        <p className="lead">{formatDate(article.publishedAt ?? article.occurredAt ?? article.collectedAt)}　·　{article.sourceName}　·　{article.isPrimarySource ? "一次情報" : "関連記事"}　·　<a href={article.originalUrl} target="_blank" rel="noreferrer">元記事 ↗</a></p>
+        <p className="lead">{formatDate(article.publishedAt ?? article.occurredAt ?? article.collectedAt)}　·　{article.sourceName}　·　{article.isPrimarySource ? "一次情報" : "関連記事"}　·　<a href={article.originalUrl} target="_blank" rel="noreferrer">元記事 <ExternalLink className="ic" aria-hidden="true" /></a></p>
       </div>
       <div className="top-actions"><ArticleMailButton article={toNewsMailArticleDto(article)} businesses={businesses} defaultOpen={openMail} /><HeaderUserMenu /></div>
     </header>
