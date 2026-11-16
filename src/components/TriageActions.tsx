@@ -74,12 +74,12 @@ export default function TriageActions({ articleId, state, showDetailLink = true 
         </button>
         <button className={`btn reject tri-more ${state === "rejected" ? "on" : ""}`} type="button" disabled={disabled} aria-expanded={openFor === "reject"} aria-label="不採用の根拠を入力する" onClick={() => toggleOption("reject")}>{openFor === "reject" ? <ChevronUp className="ic" aria-hidden="true" /> : <ChevronDown className="ic" aria-hidden="true" />}</button>
       </span>
-      {showDetailLink && <Link className="btn quiet" href={`/dashboard/articles/${articleId}`}>詳細</Link>}
+      {showDetailLink && <Link className="btn quiet detail" href={`/dashboard/articles/${articleId}`}>詳細</Link>}
       {openFor && (
         <span className="tri-reason">
           <textarea className="tri-reason-input" rows={2} maxLength={500} placeholder={`${label}の根拠（任意）`} aria-label={`${label}の根拠`} value={reason} disabled={disabled} onChange={(event) => setReason(event.target.value)} />
           <span className="tri-reason-buttons">
-            <button className={`btn ${openFor} on`} type="button" disabled={disabled} onClick={() => void decide(openFor, reason)}>{label}として送信</button>
+            <button className={`btn ${openFor}`} type="button" disabled={disabled} onClick={() => void decide(openFor, reason)}>{label}として送信</button>
             <button className="btn quiet" type="button" disabled={disabled} onClick={() => { setOpenFor(null); setReason(""); }}>キャンセル</button>
           </span>
         </span>
