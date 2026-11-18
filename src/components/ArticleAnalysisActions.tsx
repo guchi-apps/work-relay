@@ -52,7 +52,7 @@ export default function ArticleAnalysisActions({ articleId, status, triage, show
     <span className="ai-actions">
       {!hideActions && (
         <>
-          {!triageOnly && <button className={`btn ${status === null ? "primary" : "quiet"}`} type="button" disabled={inFlight || pending} onClick={() => void enqueue()}>
+          {!triageOnly && <button className={`btn ai-run ${status === null ? "primary" : "quiet"}`} type="button" disabled={inFlight || pending} onClick={() => void enqueue()}>
             {status === null ? "AI解析" : "再解析"}
           </button>}
           <TriageActions articleId={articleId} state={triage} showDetailLink={false} />
