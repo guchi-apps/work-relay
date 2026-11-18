@@ -136,8 +136,8 @@ model IndustryInformation {
   updateReason     String?                 @db.Text
   updatedByRunId   String?
   updatedByRun     CollectionRun?          @relation("IndustryInformationUpdatedByRun", fields: [updatedByRunId], references: [id], onDelete: SetNull)
-  // canonicalId/canonical/relatedReprintsは#43以降は書き込まない（過去データ互換のため列のみ残す）。
-  // 転載の統合はmergedSources／updateReason／updatedByRunIdで表現する（docs/architecture.md参照）。
+  // canonicalId/canonicalは続報の元記事（#477。週をまたいだ同一話題の採用済み記事）を指す。relatedReprintsは逆引き。
+  // 転載の統合には使わない（#43）。転載の統合はmergedSources／updateReason／updatedByRunIdで表現する（docs/architecture.md参照）。
   canonicalId      String?
   canonical        IndustryInformation?    @relation("IndustryInformationCanonical", fields: [canonicalId], references: [id], onDelete: SetNull)
   relatedReprints  IndustryInformation[]   @relation("IndustryInformationCanonical")

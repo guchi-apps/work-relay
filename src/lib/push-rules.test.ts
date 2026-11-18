@@ -35,7 +35,7 @@ test("新規0件の日は通知しない", () => {
 test("通知文面には件数が入り、仕分け画面へ飛ぶ", () => {
   const payload = buildNewArticlesPayload(5);
   assert.match(payload.body, /5件/);
-  assert.equal(payload.url, "/dashboard/inbox");
+  assert.equal(payload.url, "/dashboard?triage=pending");
 });
 
 test("404・410だけを失効として扱う", () => {

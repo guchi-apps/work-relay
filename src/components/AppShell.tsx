@@ -6,13 +6,11 @@ import { Camera, Menu, NotebookPen, Settings, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { BrandLogo } from "@/components/BrandMark";
 import SidebarNav from "@/components/SidebarNav";
-import { DIRECTION_LOCK_PX, EDGE_ZONE_PX, SWIPE_DIRECTION_RATIO, SWIPE_MIN_DISTANCE_PX, WIDE_EDGE_ZONE_PX } from "@/lib/nav-swipe";
+import { DIRECTION_LOCK_PX, SWIPE_DIRECTION_RATIO, SWIPE_MIN_DISTANCE_PX, WIDE_EDGE_ZONE_PX } from "@/lib/nav-swipe";
 
 const IMAGE_MAIL_PATH = "/dashboard/image-mail";
 const MEMO_PATH = "/dashboard/memo";
 const SETTINGS_PATH = "/settings";
-// SwipeWeekNavがマウントされ、週送りスワイプと境界幅を取り合う唯一の画面（src/app/(app)/dashboard/page.tsx）。
-const DASHBOARD_PATH = "/dashboard";
 
 // アプリ全体の外殻。PC・iPad（768px以上）ではサイドバーを左に出したままにし、スマホでは
 // globals.cssの`@media(max-width:767px)`でサイドバーを引き出し（ドロワー）へ切り替え、
@@ -47,9 +45,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       if (event.key === "Escape") setOpen(false);
     }
 
-    // 週送りスワイプ（SwipeWeekNav）と境界を取り合う/dashboardだけ従来どおりの狭い境界にし、
-    // それ以外の画面は開きやすさを優先して広く取る（#123）。
-    const edgeZonePx = pathname === DASHBOARD_PATH ? EDGE_ZONE_PX : WIDE_EDGE_ZONE_PX;
+    // 開きやすさを優先して広く取る（#123）。週送りスワイプとの取り合いは#476で無くなった。
+    const edgeZonePx = WIDE_EDGE_ZONE_PX;
 
     let start: { x: number; y: number } | null = null;
     let fromEdge = false;
@@ -126,7 +123,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       document.removeEventListener("touchend", handleTouchEnd);
       document.removeEventListener("touchcancel", handleTouchCancel);
     };
-  }, [pathname]);
+  }, []);
 
   return (
     <main className={open ? "app-shell nav-open" : "app-shell"}>

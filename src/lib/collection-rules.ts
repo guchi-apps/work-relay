@@ -36,3 +36,20 @@ export function decideDailyRunStatus(input: { feedCount: number; feedFailures: n
   if (selectedCount > 0 && articleFailures >= selectedCount) return "FAILED";
   return feedFailures + articleFailures > 0 ? "PARTIAL" : "SUCCEEDED";
 }
+
+/**
+ * RSS収集で取り込む記事の公開日の範囲（日）（#476）。以前は公開から30日以内まで「補足」として
+ * 取り込んでいたため、毎朝の新着に2〜4週間前のニュースが混ざり、「今日何が届いたか」が分からなく
+ * なっていた。AI検索収集（`COLLECTION_SEARCH_WINDOW_DAYS`）と同じ7日に揃え、古い記事で件数を埋めない。
+ */
+export const RSS_WINDOW_DAYS = 7;
+
+/** RSSの記事を取り込む公開日の下限（この時刻以降に公開された記事だけを取り込む）。 */
+export function rssWindowStart(now: Date): Date {
+  return new Date(now.getTime() - RSS_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+}
+
+/** 公開日がRSSの取り込み範囲（直近`RSS_WINDOW_DAYS`日〜実行時点）に入っているか。 */
+export function isWithinRssWindow(publishedAt: Date, now: Date): boolean {
+  return publishedAt >= rssWindowStart(now) && publishedAt <= now;
+}

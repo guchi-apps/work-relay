@@ -1,7 +1,8 @@
 import { businessFromParam } from "@/lib/business-defs";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { getWeekRange, type WeekRange } from "@/lib/jst-week";
+import { DAY_MS, getWeekRange, type WeekRange } from "@/lib/jst-week";
+import { jstDayStart, RECENT_PERIOD_DAYS, sumRunCounts, TIMELINE_LIMIT, type RunCounts, type TimelinePeriod } from "@/lib/timeline";
 import type { TriageParam } from "@/lib/triage";
 
 // 週の区切り・日付整形はPrismaに触れない`src/lib/jst-week.ts`が持つ（#110）。週報メールの
@@ -12,20 +13,15 @@ export type { CalendarDay, CalendarMonth, CalendarWeekRow, RecencyLabel, WeekRan
 
 /** `all`か事業区分の小文字キー（`exterior`など）。 */
 export type BusinessParam = string;
-export type SourceParam = "all" | "primary" | "related";
 export type ImportanceParam = "all" | "high" | "medium" | "reference";
-/** AI解析の絞り込み（#79）。`pending`は未解析・待ち・実行中、`attention`は失敗・認証待ち。 */
-export type AnalysisParam = "all" | "pending" | "analyzed" | "attention";
 
-export type IndustryInformationFilters = {
-  weekOffset: number;
+/** 業界ニュースのタイムライン（#476）の絞り込み条件。 */
+export type TimelineFilters = {
+  triage: TriageParam;
   business: BusinessParam;
-  source: SourceParam;
   importance: ImportanceParam;
   keyword: string;
-  analysis: AnalysisParam;
-  /** 週報候補から外れた記事（AIが対象外と判定、または人が除外）を隠すかどうか。 */
-  hideExcluded: boolean;
+  period: TimelinePeriod;
 };
 
 const IMPORTANCE_BY_PARAM = { high: "HIGH", medium: "MEDIUM", reference: "REFERENCE" } as const;
@@ -84,34 +80,36 @@ export const ARTICLE_ANALYSIS_INCLUDE = {
   analysisJobs: { orderBy: { queuedAt: "desc" }, take: 1 },
 } satisfies Prisma.IndustryInformationInclude;
 
+/** タイムライン用。続報の元記事（#477）も引く。カードの「続報です」リンクに使う。 */
+const TIMELINE_INCLUDE = {
+  ...ARTICLE_ANALYSIS_INCLUDE,
+  canonical: { select: { id: true, title: true, reviewedAt: true } },
+} satisfies Prisma.IndustryInformationInclude;
+
+export type TimelineItem = Prisma.IndustryInformationGetPayload<{ include: typeof TIMELINE_INCLUDE }>;
+
 export type IndustryInformationListItem = Prisma.IndustryInformationGetPayload<{ include: typeof ARTICLE_ANALYSIS_INCLUDE }>;
 
-/** AI解析の絞り込み条件。未解析は`analysisStatus`がnullのため、`in`だけでは拾えない。 */
-function analysisCondition(analysis: AnalysisParam): Prisma.IndustryInformationWhereInput | null {
-  if (analysis === "pending") return { OR: [{ analysisStatus: null }, { analysisStatus: { in: ["QUEUED", "RUNNING"] } }] };
-  if (analysis === "analyzed") return { analysisStatus: "COMPLETED" };
-  if (analysis === "attention") return { analysisStatus: { in: ["FAILED", "AUTH_REQUIRED"] } };
-  return null;
+/** 表示期間の条件。直近は取り込んだ日（`collectedAt`）で、週の指定は従来どおり公開日の週（`weekCondition()`）で引く。 */
+function periodCondition(period: TimelinePeriod, now: Date): Prisma.IndustryInformationWhereInput {
+  if (period.kind === "week") return weekCondition(getWeekRange(period.offset, now));
+  return { collectedAt: { gte: new Date(jstDayStart(now).getTime() - (RECENT_PERIOD_DAYS - 1) * DAY_MS) } };
 }
 
-/** 業界ニュース画面が表示する1週ぶんの業界情報を、絞り込み条件つきで取得する。 */
-export async function listIndustryInformation(filters: IndustryInformationFilters, now = new Date()): Promise<IndustryInformationListItem[]> {
-  const conditions: Prisma.IndustryInformationWhereInput[] = [weekCondition(getWeekRange(filters.weekOffset, now))];
+/**
+ * 業界ニュースのタイムライン（#476）。取り込んだ日時の新しい順に`TIMELINE_LIMIT`件まで引く。
+ * 日付区切り・同じ日の中の並び（公開日の新しい順）は`src/lib/timeline.ts`の`groupByCollectedDay()`が行う。
+ */
+export async function listTimeline(filters: TimelineFilters, now = new Date()): Promise<TimelineItem[]> {
+  const conditions: Prisma.IndustryInformationWhereInput[] = [periodCondition(filters.period, now), triageCondition(filters.triage)];
   if (filters.business !== "all") conditions.push({ business: businessFromParam(filters.business) });
-  if (filters.source !== "all") conditions.push({ isPrimarySource: filters.source === "primary" });
   if (filters.importance !== "all") conditions.push({ importance: IMPORTANCE_BY_PARAM[filters.importance] });
   if (filters.keyword) conditions.push(keywordCondition(filters.keyword));
-  const analysis = analysisCondition(filters.analysis);
-  if (analysis) conditions.push(analysis);
-  if (filters.hideExcluded) conditions.push({ weeklyCandidate: true });
-
-  // MySQL/MariaDBのENUMは定義順で並ぶ（`prisma/migrations/.../migration.sql`）。
-  // `periodScope`はIN_SCOPE→補足、`importance`はHIGH→MEDIUM→REFERENCEの順で、
-  // そのまま「補足は後ろ・重要度順」になる。
   return prisma.industryInformation.findMany({
     where: { AND: conditions },
-    include: ARTICLE_ANALYSIS_INCLUDE,
-    orderBy: [{ periodScope: "asc" }, { importance: "asc" }, { publishedAt: "desc" }, { collectedAt: "desc" }],
+    include: TIMELINE_INCLUDE,
+    orderBy: [{ collectedAt: "desc" }, { publishedAt: "desc" }],
+    take: TIMELINE_LIMIT,
   });
 }
 
@@ -121,11 +119,26 @@ export async function getLastCollectedAt(): Promise<Date | null> {
   return result._max.collectedAt ?? null;
 }
 
-/** 「NEW／更新」バッジ判定用の、直近の収集ランID。`collectionRunId`（作成時のラン）と
- * `updatedByRunId`（最後に更新したラン）をこれと比較し、一致する記事だけにバッジを出す。 */
-export async function getLatestCollectionRunId(): Promise<string | null> {
-  const run = await prisma.collectionRun.findFirst({ orderBy: { startedAt: "desc" }, select: { id: true } });
-  return run?.id ?? null;
+export type TodayCollection = RunCounts & {
+  /** 今日の取り込みのうち、過去に採用した記事の続報として紐付けた件数（新しく取り込んだ件数の内数）。 */
+  followUpCount: number;
+  /** 今日（JST）始まった収集ラン（RSS・AI検索収集・AIDE経由の週報登録）のID。カードのNEW／更新バッジに使う。 */
+  runIds: string[];
+  /** 今日の最後のランの開始時刻。今日まだ収集していなければnull。 */
+  lastRunAt: Date | null;
+};
+
+/** 画面上部の「今日の収集」。既存の`CollectionRun`の集計値だけを合計する（期間外で見送った件数は記録していない）。 */
+export async function getTodayCollection(now = new Date()): Promise<TodayCollection> {
+  const runs = await prisma.collectionRun.findMany({
+    where: { startedAt: { gte: jstDayStart(now) } },
+    select: { id: true, startedAt: true, insertedCount: true, mergedCount: true, excludedCount: true },
+    orderBy: { startedAt: "desc" },
+  });
+  const runIds = runs.map((run) => run.id);
+  // 続報として元記事へ紐付けた件数（#477）。専用の列は持たず、今日のランが作った`canonicalId`付きの記事を数える。
+  const followUpCount = runIds.length ? await prisma.industryInformation.count({ where: { collectionRunId: { in: runIds }, canonicalId: { not: null }, canonical: { reviewedAt: { not: null } } } }) : 0;
+  return { ...sumRunCounts(runs), followUpCount, runIds, lastRunAt: runs[0]?.startedAt ?? null };
 }
 
 export type MergedSource = { url: string; normalizedUrl: string; sourceName: string; publisher: string | null; isPrimarySource: boolean; mergedAt: string; collectionRunId: string };
@@ -136,10 +149,6 @@ export function toMergedSources(value: Prisma.JsonValue | null): MergedSource[] 
   return value.filter((item): item is MergedSource => typeof item === "object" && item !== null && typeof (item as MergedSource).url === "string" && typeof (item as MergedSource).normalizedUrl === "string");
 }
 
-/** トップ画面の新着記事一覧が1つのタブで表示する件数の上限。日次収集が1回30件まで取り込む
- * ようになった（#94）ため、未判定が数日ぶん溜まっても仕分けし切れる大きさにしてある。 */
-export const RECENT_LIMIT = 60;
-
 /** 仕分けの状態（#94）で絞る条件。`pending`は人がまだ判断していない記事（AIが対象外と判定した
  * ものも含む）で、`src/lib/triage.ts`の`getTriageState()`と同じ読み方をDBの`where`で表したもの。 */
 function triageCondition(triage: TriageParam): Prisma.IndustryInformationWhereInput {
@@ -147,22 +156,6 @@ function triageCondition(triage: TriageParam): Prisma.IndustryInformationWhereIn
   if (triage === "adopted") return { reviewedAt: { not: null }, weeklyCandidate: true };
   if (triage === "rejected") return { reviewedAt: { not: null }, weeklyCandidate: false };
   return {};
-}
-
-/** トップ画面向けに、仕分けの状態で絞った業界情報を収集日時（`collectedAt`）が新しい順で取得する。 */
-export async function listRecentIndustryInformation(triage: TriageParam): Promise<IndustryInformationListItem[]> {
-  return prisma.industryInformation.findMany({ where: triageCondition(triage), include: ARTICLE_ANALYSIS_INCLUDE, orderBy: { collectedAt: "desc" }, take: RECENT_LIMIT });
-}
-
-/**
- * 業界ニュース画面の強調バナー（#124）用。`countTriage()`の`pending`は`{reviewedAt: null}`
- * 全部で、AIが対象外と判定した記事（`ai_rejected`。人の確認待ちだが業界ニュース画面には出ない）
- * も含んでしまう。バナーが指す「新着」は、既に業界ニュース画面に出ている・人がまだ仕分けていない
- * 記事だけを指したいため、`weeklyCandidate: true`も条件に加えた狭い件数を別に持つ
- * （`src/lib/triage.ts`の`getTriageState()`の`"pending"`と同じ条件）。
- */
-export async function countPendingReview(): Promise<number> {
-  return prisma.industryInformation.count({ where: { reviewedAt: null, weeklyCandidate: true } });
 }
 
 export type TriageCounts = Record<TriageParam, number>;

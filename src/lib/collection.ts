@@ -3,8 +3,9 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { enqueueMissingSummaryAnalyses } from "@/lib/article-analysis";
 import { buildFeeds, getBusinesses, matchExcludeKeyword, zeroCounts, type BusinessDef } from "@/lib/businesses";
-import { decideDailyRunStatus, fitsNormalizedUrlColumn, MAX_SHORT_TEXT_LENGTH, normalizeUrl } from "@/lib/collection-rules";
+import { decideDailyRunStatus, fitsNormalizedUrlColumn, isWithinRssWindow, MAX_SHORT_TEXT_LENGTH, normalizeUrl } from "@/lib/collection-rules";
 import { getWeekRange, weekCondition, toMergedSources, type MergedSource, type WeekRange } from "@/lib/industry-information";
+import { followUpCutoff } from "@/lib/timeline";
 import { decideWeeklyCap, IMPORTANCE_RANK, type ImportanceValue, type PriorityFields } from "@/lib/triage";
 
 // 収集の上限（#94で「1回10件・事業ごと週5件」から広げた）。無関係な記事は新着記事画面の仕分けで
@@ -18,10 +19,10 @@ const REPLACED_UPDATE_REASON = "週あたり上限のため、優先度の高い
 const DAY_MS = 24 * 60 * 60 * 1000;
 type Business = string;
 type InformationType = "NEW_PRODUCT" | "COMPETITOR" | "INTRODUCTION_CASE" | "POLICY_SUBSIDY" | "MARKET_STATISTICS" | "USER_ISSUE" | "QUALITY_SAFETY" | "OVERSEAS_CASE" | "OTHER";
-type Candidate = { business: Business; title: string; url: string; sourceName: string; publisher: string | null; publishedAt: Date; isSupplemental: boolean; informationType: InformationType; importance: "HIGH" | "MEDIUM" | "REFERENCE"; keywords: string[]; tags: string[] };
+type Candidate = { business: Business; title: string; url: string; sourceName: string; publisher: string | null; publishedAt: Date; informationType: InformationType; importance: "HIGH" | "MEDIUM" | "REFERENCE"; keywords: string[]; tags: string[] };
 type InformationTypeValue = "NEW_PRODUCT" | "COMPETITOR" | "INTRODUCTION_CASE" | "RECRUITMENT_PARTNERSHIP" | "POLICY_SUBSIDY" | "MARKET_STATISTICS" | "USER_ISSUE" | "CONSTRUCTION" | "QUALITY_SAFETY" | "PATENT" | "ACADEMIC_RESEARCH" | "VIDEO" | "SOCIAL_TREND" | "OVERSEAS_CASE" | "OTHER";
 
-export type CollectionResult = { runId: string; status: "SUCCEEDED" | "PARTIAL" | "FAILED"; targetFrom: string; targetTo: string; supplementalFrom: string; fetchedCount: number; selectedCount: number; insertedCount: number; duplicateCount: number; mergedCount: number; excludedCount: number; failedCount: number; errors: string[] };
+export type CollectionResult = { runId: string; status: "SUCCEEDED" | "PARTIAL" | "FAILED"; targetFrom: string; targetTo: string; supplementalFrom: string | null; fetchedCount: number; selectedCount: number; insertedCount: number; duplicateCount: number; mergedCount: number; excludedCount: number; failedCount: number; errors: string[] };
 
 type Feed = ReturnType<typeof buildFeeds>[number];
 
@@ -301,6 +302,26 @@ function toCreateData(article: EventArticleInput, runId: string, normalizedUrl: 
 }
 
 /**
+ * 続報の元記事（#477）。直近`FOLLOW_UP_DAYS`日に取り込んだ、同じ事業の採用済み（人が採用した）記事のうち、
+ * `findEventMatch()`で同一話題と判定した最も新しいもののID。週内の統合（2.）で一致しなかった記事だけが
+ * ここへ来るため、週をまたいだ続報が対象になる。統合はせず、新しい記事として作って`canonicalId`に残す
+ * （取り込み日が元記事のままだとタイムラインの今日の欄に出ないため）。
+ */
+async function findFollowUpSourceId(article: EventArticleInput): Promise<string | null> {
+  const peers = await prisma.industryInformation.findMany({
+    where: {
+      business: article.business,
+      reviewedAt: { not: null },
+      weeklyCandidate: true,
+      collectedAt: { gte: followUpCutoff(new Date()) },
+    },
+    select: { id: true, business: true, informationType: true, title: true, publisher: true, sourceName: true, targetCompany: true, targetProduct: true, occurredAt: true, publishedAt: true },
+    orderBy: { collectedAt: "desc" },
+  });
+  return findEventMatch(article, peers)?.id ?? null;
+}
+
+/**
  * 業界情報1件を取り込む（#43）。AIDE経由の週報登録・自動収集の両方がこれ1本を呼ぶ。
  * 1. 完全URL一致は従来どおり冪等（`duplicate`、何も更新しない）
  * 2. 同じ週・同じ事業のレコードから同一イベントを判定し、マッチすれば新規行を作らず統合更新する
@@ -354,8 +375,9 @@ export async function upsertIndustryInformationEvent(article: EventArticleInput,
     return { outcome: "excluded", excluded };
   }
 
+  const followUpOfId = await findFollowUpSourceId(article);
   try {
-    await prisma.industryInformation.create({ data: toCreateData(article, runId, normalizedUrl) });
+    await prisma.industryInformation.create({ data: { ...toCreateData(article, runId, normalizedUrl), canonicalId: followUpOfId } });
     return { outcome: "inserted", excluded };
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return { outcome: "duplicate", excluded };
@@ -445,23 +467,24 @@ function classify(title: string, business: BusinessDef): Pick<Candidate, "inform
   return { informationType, importance, keywords: subjects.filter((subject) => title.includes(subject)), tags };
 }
 
-function parseFeed(xml: string, feed: Feed, business: BusinessDef, targetFrom: Date, targetTo: Date, supplementalFrom: Date): Candidate[] {
+function parseFeed(xml: string, feed: Feed, business: BusinessDef, now: Date): Candidate[] {
   return [...xml.matchAll(/<item(?:\s[^>]*)?>([\s\S]*?)<\/item>/gi)].map((match) => match[1]).map((item) => {
     const title = field(item, "title"); const url = field(item, "link"); const dateText = field(item, "pubDate"); const publishedAt = dateText ? new Date(dateText) : null;
-    if (!title || !url || !publishedAt || Number.isNaN(publishedAt.getTime()) || publishedAt < supplementalFrom || publishedAt > targetTo) return null;
+    // 公開から`RSS_WINDOW_DAYS`日（7日）より古い記事は取り込まない（#476。以前の30日補足は廃止）。
+    if (!title || !url || !publishedAt || Number.isNaN(publishedAt.getTime()) || !isWithinRssWindow(publishedAt, now)) return null;
     // `normalizedUrl`列（VarChar(512)）に収まらないURLは、登録で例外になる前にここで落とす（#170）。
     const normalizedUrl = normalizeUrl(url);
     if (!fitsNormalizedUrlColumn(normalizedUrl)) return null;
     // RSSのタイトル・発表元は長さが不定なので、列幅（VARCHAR(191)）で切り詰める（#410）。
     const publisher = field(item, "source");
     if (matchExcludeKeyword(business.excludeKeywords, title, publisher)) return null;
-    return { business: feed.business, title: title.slice(0, MAX_SHORT_TEXT_LENGTH), url: normalizedUrl, sourceName: feed.name.slice(0, MAX_SHORT_TEXT_LENGTH), publisher: publisher ? publisher.slice(0, MAX_SHORT_TEXT_LENGTH) : null, publishedAt, isSupplemental: publishedAt < targetFrom, ...classify(title, business) };
+    return { business: feed.business, title: title.slice(0, MAX_SHORT_TEXT_LENGTH), url: normalizedUrl, sourceName: feed.name.slice(0, MAX_SHORT_TEXT_LENGTH), publisher: publisher ? publisher.slice(0, MAX_SHORT_TEXT_LENGTH) : null, publishedAt, ...classify(title, business) };
   }).filter((item): item is Candidate => item !== null);
 }
 
 function selectCandidates(candidates: Candidate[]): Candidate[] {
   const selected: Candidate[] = [];
-  for (const candidate of candidates.sort((a, b) => Number(a.isSupplemental) - Number(b.isSupplemental) || b.publishedAt.getTime() - a.publishedAt.getTime())) {
+  for (const candidate of candidates.sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime())) {
     if (selected.length >= COLLECTION_LIMIT || selected.some((item) => item.url === candidate.url || similarTitle(item.title, candidate.title))) continue;
     if (selected.filter((item) => item.business === candidate.business).length >= BUSINESS_WEEKLY_LIMIT) continue;
     selected.push(candidate);
@@ -473,12 +496,15 @@ function selectCandidates(candidates: Candidate[]): Candidate[] {
  * 事業区分（エクステリア・ロッカー・AI関連）の業界情報の日次収集（#43。従来は週次のみだった`runWeeklyCollection`を改名）。
  * `targetFrom`は「今週（JST日曜0時始まり）の開始」に固定する。ローリング7日窓のままだと
  * 日次実行のたびに週境界をまたぐランが発生し、週内へ集約する前提が崩れるため。
+ *
+ * 取り込む記事そのものは公開から7日以内に限る（#476。`isWithinRssWindow()`）。以前は30日以内の
+ * 記事を「補足」（`PAST_30_DAYS_SUPPLEMENT`）として取り込んでいたが、今は常に`IN_SCOPE`で登録し、
+ * 補足の開始日（`supplementalFrom`）も記録しない。
  */
 export async function runDailyCollection(now = new Date()): Promise<CollectionResult> {
   const { start: targetFrom } = getWeekRange(0, now);
   const targetTo = new Date(now);
-  const supplementalFrom = new Date(now.getTime() - 30 * DAY_MS);
-  const run = await prisma.collectionRun.create({ data: { targetFrom, targetTo, supplementalFrom } });
+  const run = await prisma.collectionRun.create({ data: { targetFrom, targetTo } });
   const errors: string[] = [];
   let feedFailures = 0;
   let articleFailures = 0;
@@ -488,7 +514,7 @@ export async function runDailyCollection(now = new Date()): Promise<CollectionRe
   for (const feed of feeds) try {
     const response = await fetch(feed.url, { headers: { "user-agent": "research-desk/0.1 (+public-rss-collector)" }, signal: AbortSignal.timeout(15_000) });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    candidates.push(...parseFeed(await response.text(), feed, businesses.find((item) => item.key === feed.business)!, targetFrom, targetTo, supplementalFrom));
+    candidates.push(...parseFeed(await response.text(), feed, businesses.find((item) => item.key === feed.business)!, now));
   } catch (error) { feedFailures++; errors.push(`${feed.name}: ${error instanceof Error ? error.message : "取得に失敗しました"}`); }
   const selected = selectCandidates(candidates);
   let insertedCount = 0;
@@ -512,7 +538,7 @@ export async function runDailyCollection(now = new Date()): Promise<CollectionRe
         importance: item.importance,
         keywords: item.keywords,
         tags: item.tags,
-        periodScope: item.isSupplemental ? "PAST_30_DAYS_SUPPLEMENT" : "IN_SCOPE",
+        periodScope: "IN_SCOPE",
       }, run.id);
       if (excluded) { excludedArticles.push(excluded); excludedCount++; }
       if (outcome === "duplicate") duplicateCount++;
@@ -527,5 +553,5 @@ export async function runDailyCollection(now = new Date()): Promise<CollectionRe
   const status = decideDailyRunStatus({ feedCount: feeds.length, feedFailures, selectedCount: selected.length, articleFailures });
   await prisma.collectionRun.update({ where: { id: run.id }, data: { finishedAt: new Date(), status, fetchedCount: candidates.length, selectedCount: selected.length, insertedCount, duplicateCount, mergedCount, excludedCount, failedCount: errors.length, errors, excludedArticles: excludedArticles.length ? (excludedArticles as unknown as Prisma.InputJsonValue) : undefined } });
   await enqueueMissingSummaryAnalyses();
-  return { runId: run.id, status, targetFrom: targetFrom.toISOString(), targetTo: targetTo.toISOString(), supplementalFrom: supplementalFrom.toISOString(), fetchedCount: candidates.length, selectedCount: selected.length, insertedCount, duplicateCount, mergedCount, excludedCount, failedCount: errors.length, errors };
+  return { runId: run.id, status, targetFrom: targetFrom.toISOString(), targetTo: targetTo.toISOString(), supplementalFrom: null, fetchedCount: candidates.length, selectedCount: selected.length, insertedCount, duplicateCount, mergedCount, excludedCount, failedCount: errors.length, errors };
 }
