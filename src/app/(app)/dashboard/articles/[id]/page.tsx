@@ -36,7 +36,7 @@ export default async function ArticleDetailPage({ params, searchParams }: { para
   const openMail = query.mail === "1";
   // 新着記事から開いたときは、戻り先を新着記事にし、未解析なら開いた時点で解析を始める（#467）。
   const origin = parseArticleOrigin(query.from);
-  const back = articleBackLink(origin);
+  const back = articleBackLink(origin, query.triage);
   const [article, overview, businesses] = await Promise.all([getArticleDetail(id), getAnalysisOverview(), getBusinesses()]);
   if (!article) notFound();
 
@@ -56,7 +56,7 @@ export default async function ArticleDetailPage({ params, searchParams }: { para
 
   return <section className="content">
     <Link className="breadcrumb" href={back.href}>‹　{back.label}</Link>
-    {shouldAutoAnalyze(origin, status) && <AutoAnalyzeOnOpen articleId={article.id} />}
+    {shouldAutoAnalyze(origin, status, triage) && <AutoAnalyzeOnOpen articleId={article.id} />}
     <header className="page-header">
       <div>
         <p className="eyebrow">ARTICLE</p>

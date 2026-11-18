@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 import TriageActions from "@/components/TriageActions";
 import { articleDetailHref } from "@/lib/article-back-link";
@@ -34,6 +34,7 @@ type Props = {
  */
 export default function ArticleAnalysisActions({ articleId, status, triage, showDetailLink = true, hideActions = false, triageOnly = false }: Props) {
   const router = useRouter();
+  const triageTab = useSearchParams().get("triage");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const inFlight = isAnalysisInFlight(status);
@@ -59,7 +60,7 @@ export default function ArticleAnalysisActions({ articleId, status, triage, show
           <TriageActions articleId={articleId} state={triage} showDetailLink={false} />
         </>
       )}
-      {showDetailLink && <Link className="btn quiet detail detail-link" href={articleDetailHref(articleId, triageOnly ? "inbox" : null)}>詳細を見る</Link>}
+      {showDetailLink && <Link className="btn quiet detail detail-link" href={articleDetailHref(articleId, triageOnly ? "inbox" : null, triageTab)}>詳細を見る</Link>}
       {error && <span className="ai-error">{error}</span>}
     </span>
   );

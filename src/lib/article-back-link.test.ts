@@ -9,19 +9,23 @@ test("from=inboxだけを新着記事起点として読む", () => {
   assert.equal(parseArticleOrigin(undefined), null);
 });
 
-test("戻り先は起点で変わる", () => {
+test("戻り先は起点と仕分けタブで変わる", () => {
   assert.equal(articleBackLink("inbox").href, "/dashboard/inbox");
-  assert.equal(articleBackLink(null).href, "/dashboard");
+  assert.equal(articleBackLink("inbox", "adopted").href, "/dashboard/inbox?triage=adopted");
+  assert.equal(articleBackLink("inbox", "//evil").href, "/dashboard/inbox");
+  assert.equal(articleBackLink(null, "adopted").href, "/dashboard");
 });
 
-test("自動解析は新着記事から開いた未解析の記事だけ", () => {
-  assert.equal(shouldAutoAnalyze("inbox", null), true);
-  assert.equal(shouldAutoAnalyze("inbox", "COMPLETED"), false);
-  assert.equal(shouldAutoAnalyze("inbox", "FAILED"), false);
-  assert.equal(shouldAutoAnalyze(null, null), false);
+test("自動解析は新着記事から開いた未解析で、不採用でない記事だけ", () => {
+  assert.equal(shouldAutoAnalyze("inbox", null, "pending"), true);
+  assert.equal(shouldAutoAnalyze("inbox", null, "rejected"), false);
+  assert.equal(shouldAutoAnalyze("inbox", "COMPLETED", "pending"), false);
+  assert.equal(shouldAutoAnalyze("inbox", "FAILED", "pending"), false);
+  assert.equal(shouldAutoAnalyze(null, null, "pending"), false);
 });
 
-test("詳細リンクは新着記事起点のときだけfromを付ける", () => {
+test("詳細リンクは新着記事起点のときだけfromと仕分けタブを付ける", () => {
   assert.equal(articleDetailHref("a1", "inbox"), "/dashboard/articles/a1?from=inbox");
-  assert.equal(articleDetailHref("a1", null), "/dashboard/articles/a1");
+  assert.equal(articleDetailHref("a1", "inbox", "rejected"), "/dashboard/articles/a1?from=inbox&triage=rejected");
+  assert.equal(articleDetailHref("a1", null, "rejected"), "/dashboard/articles/a1");
 });
