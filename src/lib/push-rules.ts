@@ -16,8 +16,8 @@ export interface PushPayload {
   tag: string;
 }
 
-/** 通知タップで開く画面（新着記事の仕分け画面） */
-export const NEW_ARTICLES_URL = "/dashboard/inbox";
+/** 通知タップで開く画面（業界ニュースの未判定タブ。#476で新着記事画面を統合） */
+export const NEW_ARTICLES_URL = "/dashboard?triage=pending";
 
 const MAX_ENDPOINT_LENGTH = 768;
 const MAX_KEY_LENGTH = 255;

@@ -41,28 +41,14 @@ function NewsCardSkeleton({ lines = 2 }: { lines?: number }) {
   );
 }
 
-export function HomeSkeleton() {
-  return (
-    <section className="content">
-      <HeaderSkeleton breadcrumb ctaWidth={100} />
-      <Bar width="100%" height={42} className="sk-weeknav" />
-      <Bar width="100%" height={44} className="sk-weeknav" />
-      <NewsCardSkeleton />
-      <NewsCardSkeleton />
-      <NewsCardSkeleton lines={1} />
-    </section>
-  );
-}
-
 export function DashboardSkeleton() {
   return (
     <section className="content">
       <HeaderSkeleton ctaWidth={140} />
-      <Bar width="100%" height={38} className="sk-weeknav" />
-      <Bar width="100%" height={96} className="sk-keypoints" />
+      <Bar width="100%" height={64} className="sk-keypoints" />
+      <Bar width="100%" height={40} className="sk-weeknav" />
       <div className="sk-filters">
-        <Bar width={110} height={35} />
-        <Bar width={110} height={35} />
+        <Bar width={180} height={35} />
         <Bar width={110} height={35} />
         <Bar width="100%" height={35} />
         <Bar width={90} height={35} />
