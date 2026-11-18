@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { canAcceptReport, classifyFailure, FAILURE_MESSAGE_LIMIT, isDuplicateJobError, leaseExpiresAtForSlot, LEASE_SECONDS, MAX_CLAIM_JOBS, shouldAutoExcludeFromWeekly, truncateFailureMessage, type FailureKindValue, type FailureSignal, type JobStatusValue } from "@/lib/analysis-job-rules";
+import { canAcceptReport, classifyFailure, FAILURE_MESSAGE_LIMIT, isDuplicateJobError, leaseExpiresAtForSlot, LEASE_SECONDS, MAX_CLAIM_JOBS, MISSING_SUMMARY_BATCH, missingSummaryCutoff, shouldAutoExcludeFromWeekly, truncateFailureMessage, type FailureKindValue, type FailureSignal, type JobStatusValue } from "@/lib/analysis-job-rules";
 import { tokenColumns, type TokenUsage } from "@/lib/ai-usage";
 import { claimCollectionSearchJobs, releaseExpiredCollectionSearchLeases, reportCollectionSearchResult } from "@/lib/collection-search";
 import { getBusinesses } from "@/lib/businesses";
@@ -46,6 +46,39 @@ export async function enqueueAnalysisJob(articleId: string, requestedBy: string 
   } catch (error) {
     if (isDuplicateJobError(error)) return { ok: false, reason: "already_queued" };
     throw error;
+  }
+}
+
+/**
+ * 要約が無く、まだ一度も解析していない記事の解析ジョブを積む（#466）。
+ *
+ * RSS収集の記事は要約も本文も持たないため、新着記事画面に出せる要約はAI解析の結果にしか無い。
+ * 取り込み直後に呼び、新着記事へ要約が入るようにする。解析済み・失敗済み（`analysisStatus`が
+ * null以外）は対象外なので、失敗した記事を収集のたびに積み直すことはない。人が不採用にした記事も除く。
+ * 失敗しても収集結果には影響させず、ログだけ残す。
+ */
+export async function enqueueMissingSummaryAnalyses(now = new Date()): Promise<number> {
+  try {
+    const targets = await prisma.industryInformation.findMany({
+      where: {
+        analysisStatus: null,
+        collectedAt: { gte: missingSummaryCutoff(now) },
+        OR: [{ summary: null }, { summary: "" }],
+        NOT: { reviewedAt: { not: null }, weeklyCandidate: false },
+      },
+      orderBy: { collectedAt: "desc" },
+      take: MISSING_SUMMARY_BATCH,
+      select: { id: true },
+    });
+    let queued = 0;
+    for (const target of targets) {
+      const result = await enqueueAnalysisJob(target.id, null);
+      if (result.ok) queued++;
+    }
+    return queued;
+  } catch (error) {
+    console.error("要約が無い記事の解析ジョブを積めませんでした", error);
+    return 0;
   }
 }
 

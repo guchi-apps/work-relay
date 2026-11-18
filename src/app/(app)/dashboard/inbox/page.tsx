@@ -6,7 +6,7 @@ import { ForeignTitleBadge, UntranslatedSummaryNote } from "@/components/Article
 import HeaderUserMenu from "@/components/HeaderUserMenu";
 import { getCurrentUser } from "@/lib/auth";
 import { businessLabel, getBusinesses, type BusinessDef } from "@/lib/businesses";
-import { pickDisplaySummary } from "@/lib/display-summary";
+import { pickDisplaySummary, summaryPlaceholder } from "@/lib/display-summary";
 import { countTriage, formatDate, getRecencyLabel, listRecentIndustryInformation, toStringArray, type IndustryInformationListItem, type RecencyLabel } from "@/lib/industry-information";
 import { getTriageState, parseTriageParam, TRIAGE_PARAMS, type TriageParam } from "@/lib/triage";
 
@@ -48,7 +48,7 @@ function RecentCard({ item, businesses }: { item: IndustryInformationListItem; b
     <div className="card-body">
       <div className="biz"><i className={color === "teal" ? "" : color} />{businessLabel(businesses, item.business)}</div>
       <div className="news-head"><div><h3><ForeignTitleBadge title={item.title} />{item.title}</h3><p className="meta">{formatDate(item.publishedAt ?? item.occurredAt ?? item.collectedAt)}　·　{item.sourceName}　·　{item.isPrimarySource ? "一次情報" : "関連記事"}</p></div><span className={`badge ${item.importance === "HIGH" ? "high" : ""}`}>重要度 {importanceLabels[item.importance]}</span></div>
-      <p className="summary">{summary ?? "要約は登録されていません。"}</p>
+      <p className="summary">{summary ?? summaryPlaceholder(item.analysisStatus)}</p>
       <UntranslatedSummaryNote summary={summary} />
       <ArticleAnalysisBlock item={item} businesses={businesses} triageOnly />
       <div className="news-foot"><div className="tags">{item.targetCompany && <b>{item.targetCompany}</b>}{tags.map((tag) => <span key={tag}>{tag}</span>)}</div><a href={item.originalUrl} target="_blank" rel="noreferrer">元記事 <ExternalLink className="ic" aria-hidden="true" /></a></div>
