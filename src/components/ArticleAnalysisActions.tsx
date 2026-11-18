@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 import TriageActions from "@/components/TriageActions";
+import { articleDetailHref } from "@/lib/article-back-link";
 import { isAnalysisInFlight } from "@/lib/analysis-display";
 import type { JobStatusValue } from "@/lib/article-analysis";
 import type { TriageState } from "@/lib/triage";
@@ -33,6 +34,7 @@ type Props = {
  */
 export default function ArticleAnalysisActions({ articleId, status, triage, showDetailLink = true, hideActions = false, triageOnly = false }: Props) {
   const router = useRouter();
+  const triageTab = useSearchParams().get("triage");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const inFlight = isAnalysisInFlight(status);
@@ -52,13 +54,13 @@ export default function ArticleAnalysisActions({ articleId, status, triage, show
     <span className="ai-actions">
       {!hideActions && (
         <>
-          {!triageOnly && <button className={`btn ${status === null ? "primary" : "quiet"}`} type="button" disabled={inFlight || pending} onClick={() => void enqueue()}>
+          {!triageOnly && <button className={`btn ai-run ${status === null ? "primary" : "quiet"}`} type="button" disabled={inFlight || pending} onClick={() => void enqueue()}>
             {status === null ? "AI解析" : "再解析"}
           </button>}
           <TriageActions articleId={articleId} state={triage} showDetailLink={false} />
         </>
       )}
-      {showDetailLink && <Link className="btn quiet detail detail-link" href={`/dashboard/articles/${articleId}`}>詳細を見る</Link>}
+      {showDetailLink && <Link className="btn quiet detail detail-link" href={articleDetailHref(articleId, triageOnly ? "inbox" : null, triageTab)}>詳細を見る</Link>}
       {error && <span className="ai-error">{error}</span>}
     </span>
   );

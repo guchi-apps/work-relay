@@ -655,6 +655,13 @@ Next.jsのSuspense境界（`src/app/loading.tsx`）がサイドバーごと丸�
 解析させる。Research DeskのサーバーからOpenAI APIは呼ばない（従量課金ではなくChatGPTの契約枠を
 使うため）。実行は定期バッチではなく、画面の「AI解析」「再解析」から積むオンデマンド方式。
 
+**取り込み時に要約が無い記事の解析を自動で積む**（#466）。RSS収集（`runDailyCollection`）の記事は
+要約も本文も持たず、新着記事画面に出せる要約はAI解析の結果にしか無い。そのため`runDailyCollection`・
+`importWeeklyReport`（AI収集も通る）の終わりで`enqueueMissingSummaryAnalyses()`
+（`src/lib/article-analysis.ts`）が、要約が空・`analysisStatus`がnull・収集から14日以内・人が不採用にして
+いない記事の解析ジョブを1回30件まで積む。失敗済みの記事（`analysisStatus`がnull以外）は積み直さない。
+解析待ち・実行中の記事は一覧に「要約を生成中です。」と出る（`summaryPlaceholder()`）。
+
 ### 実行役はVPSに置く（#86）
 
 #79ではサブPCの常駐ポーラーに実行させる前提だったが、**サブPCの`~/.config/systemd/user/`は

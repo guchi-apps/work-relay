@@ -12,3 +12,11 @@ export function pickDisplaySummary(item: { summary: string | null; analyses: { s
   const own = item.summary?.trim();
   return own ? own : null;
 }
+
+/**
+ * 要約が無いときに出す文言（#466）。解析待ち・実行中は取り込み時に自動で積まれた解析の結果を
+ * 待っている状態なので、登録漏れに見えないよう「生成中」と出す。
+ */
+export function summaryPlaceholder(analysisStatus: string | null | undefined): string {
+  return analysisStatus === "QUEUED" || analysisStatus === "RUNNING" ? "要約を生成中です。" : "要約は登録されていません。";
+}

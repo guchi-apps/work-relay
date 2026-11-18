@@ -8,7 +8,7 @@ import HeaderUserMenu from "@/components/HeaderUserMenu";
 import { getCurrentUser } from "@/lib/auth";
 import { businessParam, getBusinesses, parseBusinessParam, sortBusinesses, type BusinessDef } from "@/lib/businesses";
 import { getAnalysisOverview } from "@/lib/article-analysis";
-import { pickDisplaySummary } from "@/lib/display-summary";
+import { pickDisplaySummary, summaryPlaceholder } from "@/lib/display-summary";
 import SwipeWeekNav from "@/components/SwipeWeekNav";
 import WeekCalendarPicker from "@/components/WeekCalendarPicker";
 import { countPendingReview, OLDEST_WEEK_OFFSET, buildWeekCalendarMonths, formatDate, formatDateTime, formatMetrics, formatWeekLabel, getIsoWeekNumber, getLastCollectedAt, getLatestCollectionRunId, getWeekRange, listIndustryInformation, parseWeekOffset, toMergedSources, toStringArray, type AnalysisParam, type BusinessParam, type ImportanceParam, type IndustryInformationListItem, type SourceParam } from "@/lib/industry-information";
@@ -45,7 +45,7 @@ function Card({ item, latestRunId, businesses }: { item: IndustryInformationList
         <span className={`badge ${item.importance === "HIGH" ? "high" : ""}`}>{supplement ? "30日以内" : `重要度 ${importanceLabels[item.importance]}`}</span>
       </div>
     </div>
-    <p className="summary">{summary ?? "要約は登録されていません。"}</p>
+    <p className="summary">{summary ?? summaryPlaceholder(item.analysisStatus)}</p>
     <UntranslatedSummaryNote summary={summary} />
     <dl className="details"><div><dt>主な数値・事実</dt><dd>{formatMetrics(item.extractedMetrics) ?? "—"}</dd></div><div><dt>企画・設計への示唆</dt><dd>{item.implications ?? "—"}</dd></div><div><dt>キーワード</dt><dd>{keywords.length ? keywords.join("／") : "—"}</dd></div></dl>
     <ArticleAnalysisBlock item={item} businesses={businesses} hideActionsWhenAdopted />

@@ -22,3 +22,12 @@ test("どちらも無ければnull", () => {
   assert.equal(pickDisplaySummary({ summary: null, analyses: [] }), null);
   assert.equal(pickDisplaySummary({ summary: " ", analyses: [] }), null);
 });
+
+import { summaryPlaceholder } from "./display-summary.ts";
+
+test("要約が無いとき、解析待ち・実行中は生成中、それ以外は従来の文言を返す", () => {
+  assert.equal(summaryPlaceholder("QUEUED"), "要約を生成中です。");
+  assert.equal(summaryPlaceholder("RUNNING"), "要約を生成中です。");
+  assert.equal(summaryPlaceholder("FAILED"), "要約は登録されていません。");
+  assert.equal(summaryPlaceholder(null), "要約は登録されていません。");
+});

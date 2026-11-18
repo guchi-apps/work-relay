@@ -158,3 +158,16 @@ export function isLeaseExpired(leaseExpiresAt: Date | null, now: Date): boolean 
 export function shouldAutoExcludeFromWeekly(relevance: string, reviewedAt: Date | null): boolean {
   return relevance === "OUT_OF_SCOPE" && reviewedAt === null;
 }
+
+// --- 取り込み時の要約補完（#466） ---------------------------------------------------------
+
+/** 要約が無い記事を自動で解析に積む1回あたりの上限。Codexの利用枠を使い切らないための歯止め。 */
+export const MISSING_SUMMARY_BATCH = 30;
+
+/** 要約が無い記事を自動で解析に積む対象にする、収集日からの日数。古い記事まで遡って積まない。 */
+export const MISSING_SUMMARY_LOOKBACK_DAYS = 14;
+
+/** 自動で積む対象にする収集日時の下限。 */
+export function missingSummaryCutoff(now: Date): Date {
+  return new Date(now.getTime() - MISSING_SUMMARY_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+}
