@@ -137,7 +137,7 @@ export async function getTodayCollection(now = new Date()): Promise<TodayCollect
   });
   const runIds = runs.map((run) => run.id);
   // 続報として元記事へ紐付けた件数（#477）。専用の列は持たず、今日のランが作った`canonicalId`付きの記事を数える。
-  const followUpCount = runIds.length ? await prisma.industryInformation.count({ where: { collectionRunId: { in: runIds }, canonicalId: { not: null } } }) : 0;
+  const followUpCount = runIds.length ? await prisma.industryInformation.count({ where: { collectionRunId: { in: runIds }, canonicalId: { not: null }, canonical: { reviewedAt: { not: null } } } }) : 0;
   return { ...sumRunCounts(runs), followUpCount, runIds, lastRunAt: runs[0]?.startedAt ?? null };
 }
 

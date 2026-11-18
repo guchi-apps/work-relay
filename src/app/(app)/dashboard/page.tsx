@@ -71,10 +71,10 @@ function Card({ item, businesses, todayRunIds, tab }: { item: TimelineItem; busi
   return <article className={`news-card timeline-card ${hidden ? "out-of-scope" : ""}`}>
     <div className="biz"><i className={color === "teal" ? "" : color} />{businessLabel(businesses, item.business)}
       {badge && <span className={`status-pill ${badge}`}>{badge === "new" ? "NEW" : "更新"}</span>}
-      {item.canonical && <span className="status-pill followup">続報</span>}
+      {item.canonical?.reviewedAt && <span className="status-pill followup">続報</span>}
       <span className={`badge ${item.importance === "HIGH" ? "high" : ""}`}>重要度 {importanceLabels[item.importance]}</span>
     </div>
-    {item.canonical && <p className="followup-note"><Link href={`/dashboard/articles/${item.canonical.id}`}>{followUpLabel(item.canonical.reviewedAt, item.canonical.title)}</Link></p>}
+    {item.canonical?.reviewedAt && <p className="followup-note"><Link href={`/dashboard/articles/${item.canonical.id}`}>{followUpLabel(item.canonical.reviewedAt, item.canonical.title)}</Link></p>}
     <h3><ForeignTitleBadge title={item.title} />{item.title}</h3>
     <p className="meta"><span className={stale ? "stale" : undefined} title={stale ? "取り込んだ時点で公開から3日以上たっていた記事です" : undefined}>公開 {formatDayWithWeekday(displayDate(item))}</span>　·　{item.sourceName}　·　{item.isPrimarySource ? "一次情報" : "関連記事"}</p>
     <p className="summary">{summary ?? summaryPlaceholder(item.analysisStatus)}</p>
