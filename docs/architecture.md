@@ -82,7 +82,12 @@ car-care・db-consoleと同じ。`?next=`のようなクエリ由来の戻り先
 `updateReason`（直近の更新理由）・`updatedByRunId`（最後に統合・更新した `CollectionRun`）で
 表現する（#43）。`canonicalId`/`canonical`/`relatedReprints` はこの用途と重複し、かつ表示側
 （`listIndustryInformation()`・`dashboard/page.tsx`）で一切参照されず実効性が無かったため、
-**#43 以降は書き込みに使わない**（過去データ互換のため列・リレーションのみ残す）。
+**転載の統合には使わない**（#43）。
+
+週をまたいだ続報（#477）には `canonicalId`/`canonical` を再利用する。取り込み時、週内の統合で一致しなかった記事を
+直近30日に取り込んだ同じ事業の採用済み記事と `findEventMatch()` で比べ、一致したら統合せず新しい記事として作り、
+元記事のIDを `canonicalId` に記録する（`findFollowUpSourceId()`）。カードの「続報」の札・リンクと、今日の収集の
+「続報として紐付け」（今日のランが作った `canonicalId` 付きの記事の数）はここから出す。
 
 事業区分・情報区分、重要度・公開日、対象期間・公開日、転載グループには複合／検索用インデックスを
 付けている。これにより、後続の検索・フィルター・週報生成は公開日を基準に必要な情報を絞り込める。

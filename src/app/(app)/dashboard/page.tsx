@@ -9,8 +9,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { businessLabel, businessParam, getBusinesses, parseBusinessParam, sortBusinesses, type BusinessDef } from "@/lib/businesses";
 import { getAnalysisOverview } from "@/lib/article-analysis";
 import { pickDisplaySummary, summaryPlaceholder } from "@/lib/display-summary";
-import { countTriage, formatDateTime, formatWeekLabel, getLastCollectedAt, getTodayCollection, getWeekRange, listTimeline, OLDEST_WEEK_OFFSET, toMergedSources, toStringArray, type BusinessParam, type ImportanceParam, type IndustryInformationListItem, type TodayCollection } from "@/lib/industry-information";
-import { cardBadge, dayHeading, defaultTriageTab, displayDate, formatDayWithWeekday, groupByCollectedDay, isStaleArticle, parsePeriodParam, periodParam, RECENT_PERIOD_DAYS, TIMELINE_LIMIT, type TimelinePeriod } from "@/lib/timeline";
+import { countTriage, formatDateTime, formatWeekLabel, getLastCollectedAt, getTodayCollection, getWeekRange, listTimeline, OLDEST_WEEK_OFFSET, toMergedSources, toStringArray, type BusinessParam, type ImportanceParam, type TimelineItem, type TodayCollection } from "@/lib/industry-information";
+import { cardBadge, dayHeading, defaultTriageTab, displayDate, followUpLabel, formatDayWithWeekday, groupByCollectedDay, isStaleArticle, parsePeriodParam, periodParam, RECENT_PERIOD_DAYS, TIMELINE_LIMIT, type TimelinePeriod } from "@/lib/timeline";
 import { getTriageState, TRIAGE_PARAMS, type TriageParam } from "@/lib/triage";
 
 // 業界ニュースのタイムライン（#476）。以前の「公開日の週×事業区分」の段組みと、新着記事画面
@@ -52,13 +52,14 @@ function TodayStrip({ today, pendingCount, pendingHref }: { today: TodayCollecti
   return <section className="today-strip" aria-label="今日の収集">
     <div className="ttl">今日の収集<small>{today.lastRunAt ? `${formatDateTime(today.lastRunAt)}・RSSとAI検索` : "今日はまだ収集していません"}</small></div>
     <div className="st hl"><b>{today.insertedCount}</b><span>新しく取り込み</span></div>
+    <div className="st"><b>{today.followUpCount}</b><span>続報として紐付け</span></div>
     <div className="st"><b>{today.mergedCount}</b><span>既存の記事に統合</span></div>
     <div className="st"><b>{today.excludedCount}</b><span>上限のため見送り</span></div>
     {pendingCount > 0 && <Link className="go" href={pendingHref}>未判定 {pendingCount}件を見る</Link>}
   </section>;
 }
 
-function Card({ item, businesses, todayRunIds, tab }: { item: IndustryInformationListItem; businesses: BusinessDef[]; todayRunIds: ReadonlySet<string>; tab: TriageParam }) {
+function Card({ item, businesses, todayRunIds, tab }: { item: TimelineItem; businesses: BusinessDef[]; todayRunIds: ReadonlySet<string>; tab: TriageParam }) {
   const color = businesses.find((def) => def.key === item.business)?.color ?? "teal";
   const badge = cardBadge(item, todayRunIds);
   const state = getTriageState(item);
@@ -70,8 +71,10 @@ function Card({ item, businesses, todayRunIds, tab }: { item: IndustryInformatio
   return <article className={`news-card timeline-card ${hidden ? "out-of-scope" : ""}`}>
     <div className="biz"><i className={color === "teal" ? "" : color} />{businessLabel(businesses, item.business)}
       {badge && <span className={`status-pill ${badge}`}>{badge === "new" ? "NEW" : "更新"}</span>}
+      {item.canonical && <span className="status-pill followup">続報</span>}
       <span className={`badge ${item.importance === "HIGH" ? "high" : ""}`}>重要度 {importanceLabels[item.importance]}</span>
     </div>
+    {item.canonical && <p className="followup-note"><Link href={`/dashboard/articles/${item.canonical.id}`}>{followUpLabel(item.canonical.reviewedAt, item.canonical.title)}</Link></p>}
     <h3><ForeignTitleBadge title={item.title} />{item.title}</h3>
     <p className="meta"><span className={stale ? "stale" : undefined} title={stale ? "取り込んだ時点で公開から3日以上たっていた記事です" : undefined}>公開 {formatDayWithWeekday(displayDate(item))}</span>　·　{item.sourceName}　·　{item.isPrimarySource ? "一次情報" : "関連記事"}</p>
     <p className="summary">{summary ?? summaryPlaceholder(item.analysisStatus)}</p>

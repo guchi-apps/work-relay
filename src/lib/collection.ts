@@ -5,6 +5,7 @@ import { enqueueMissingSummaryAnalyses } from "@/lib/article-analysis";
 import { buildFeeds, getBusinesses, matchExcludeKeyword, zeroCounts, type BusinessDef } from "@/lib/businesses";
 import { decideDailyRunStatus, fitsNormalizedUrlColumn, isWithinRssWindow, MAX_SHORT_TEXT_LENGTH, normalizeUrl } from "@/lib/collection-rules";
 import { getWeekRange, weekCondition, toMergedSources, type MergedSource, type WeekRange } from "@/lib/industry-information";
+import { followUpCutoff } from "@/lib/timeline";
 import { decideWeeklyCap, IMPORTANCE_RANK, type ImportanceValue, type PriorityFields } from "@/lib/triage";
 
 // 収集の上限（#94で「1回10件・事業ごと週5件」から広げた）。無関係な記事は新着記事画面の仕分けで
@@ -301,6 +302,26 @@ function toCreateData(article: EventArticleInput, runId: string, normalizedUrl: 
 }
 
 /**
+ * 続報の元記事（#477）。直近`FOLLOW_UP_DAYS`日に取り込んだ、同じ事業の採用済み（人が採用した）記事のうち、
+ * `findEventMatch()`で同一話題と判定した最も新しいもののID。週内の統合（2.）で一致しなかった記事だけが
+ * ここへ来るため、週をまたいだ続報が対象になる。統合はせず、新しい記事として作って`canonicalId`に残す
+ * （取り込み日が元記事のままだとタイムラインの今日の欄に出ないため）。
+ */
+async function findFollowUpSourceId(article: EventArticleInput): Promise<string | null> {
+  const peers = await prisma.industryInformation.findMany({
+    where: {
+      business: article.business,
+      reviewedAt: { not: null },
+      weeklyCandidate: true,
+      collectedAt: { gte: followUpCutoff(new Date()) },
+    },
+    select: { id: true, business: true, informationType: true, title: true, publisher: true, sourceName: true, targetCompany: true, targetProduct: true, occurredAt: true, publishedAt: true },
+    orderBy: { collectedAt: "desc" },
+  });
+  return findEventMatch(article, peers)?.id ?? null;
+}
+
+/**
  * 業界情報1件を取り込む（#43）。AIDE経由の週報登録・自動収集の両方がこれ1本を呼ぶ。
  * 1. 完全URL一致は従来どおり冪等（`duplicate`、何も更新しない）
  * 2. 同じ週・同じ事業のレコードから同一イベントを判定し、マッチすれば新規行を作らず統合更新する
@@ -354,8 +375,9 @@ export async function upsertIndustryInformationEvent(article: EventArticleInput,
     return { outcome: "excluded", excluded };
   }
 
+  const followUpOfId = await findFollowUpSourceId(article);
   try {
-    await prisma.industryInformation.create({ data: toCreateData(article, runId, normalizedUrl) });
+    await prisma.industryInformation.create({ data: { ...toCreateData(article, runId, normalizedUrl), canonicalId: followUpOfId } });
     return { outcome: "inserted", excluded };
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return { outcome: "duplicate", excluded };
