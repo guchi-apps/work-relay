@@ -107,6 +107,10 @@ ul.history{margin:0;padding:0;display:flex;flex-direction:column}ul.history li{l
 .timeline-card .meta .stale,.timeline-page .note .stale{color:var(--amber);font-weight:700}
 .implication{font-size:12px;background:var(--teal-pale);border-left:3px solid var(--teal);border-radius:0 6px 6px 0;padding:6px 10px;margin:8px 0 0;color:var(--teal-deep);line-height:1.7}
 .implication b{font-size:10.5px;margin-right:8px}
+.status-pill.followup{background:var(--amberbg);color:var(--amber)}
+.followup-note{margin:0 0 4px;font-size:11.5px}
+.followup-note a{color:var(--amber);text-decoration:none}
+.followup-note a:hover{text-decoration:underline}
 .same-topic{border:1px dashed var(--line);border-radius:8px;padding:7px 11px;margin-top:8px;font-size:11.5px;color:var(--soft)}
 .same-topic summary{cursor:pointer;font-weight:700;color:var(--ink)}
 .same-topic ul{margin:6px 0 2px;padding-left:18px}

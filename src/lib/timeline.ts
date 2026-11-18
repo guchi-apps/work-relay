@@ -109,6 +109,21 @@ export function defaultTriageTab(pendingCount: number): TriageParam {
   return pendingCount > 0 ? "pending" : "adopted";
 }
 
+/** 続報として元記事を探す範囲（取り込んでからの日数）。 */
+export const FOLLOW_UP_DAYS = 30;
+
+/** 続報の元記事を探す下限（`now`の`FOLLOW_UP_DAYS`日前）。 */
+export function followUpCutoff(now: Date): Date {
+  return new Date(now.getTime() - FOLLOW_UP_DAYS * 24 * 60 * 60 * 1000);
+}
+
+/** 続報カードの文言。「11/02に採用した『…』の続報です」。採用日はJSTで表す。 */
+export function followUpLabel(adoptedAt: Date | null, title: string): string {
+  if (!adoptedAt) return `採用した『${title}』の続報です`;
+  const [, month, day] = jstDayKey(adoptedAt).split("-");
+  return `${month}/${day}に採用した『${title}』の続報です`;
+}
+
 export type RunCounts = { insertedCount: number; mergedCount: number; excludedCount: number };
 
 /** 今日の収集ランの件数を合計する（RSSとAI検索収集で、1日に複数のランがある）。 */

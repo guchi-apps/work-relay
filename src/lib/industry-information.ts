@@ -80,6 +80,14 @@ export const ARTICLE_ANALYSIS_INCLUDE = {
   analysisJobs: { orderBy: { queuedAt: "desc" }, take: 1 },
 } satisfies Prisma.IndustryInformationInclude;
 
+/** タイムライン用。続報の元記事（#477）も引く。カードの「続報です」リンクに使う。 */
+const TIMELINE_INCLUDE = {
+  ...ARTICLE_ANALYSIS_INCLUDE,
+  canonical: { select: { id: true, title: true, reviewedAt: true } },
+} satisfies Prisma.IndustryInformationInclude;
+
+export type TimelineItem = Prisma.IndustryInformationGetPayload<{ include: typeof TIMELINE_INCLUDE }>;
+
 export type IndustryInformationListItem = Prisma.IndustryInformationGetPayload<{ include: typeof ARTICLE_ANALYSIS_INCLUDE }>;
 
 /** 表示期間の条件。直近は取り込んだ日（`collectedAt`）で、週の指定は従来どおり公開日の週（`weekCondition()`）で引く。 */
@@ -92,14 +100,14 @@ function periodCondition(period: TimelinePeriod, now: Date): Prisma.IndustryInfo
  * 業界ニュースのタイムライン（#476）。取り込んだ日時の新しい順に`TIMELINE_LIMIT`件まで引く。
  * 日付区切り・同じ日の中の並び（公開日の新しい順）は`src/lib/timeline.ts`の`groupByCollectedDay()`が行う。
  */
-export async function listTimeline(filters: TimelineFilters, now = new Date()): Promise<IndustryInformationListItem[]> {
+export async function listTimeline(filters: TimelineFilters, now = new Date()): Promise<TimelineItem[]> {
   const conditions: Prisma.IndustryInformationWhereInput[] = [periodCondition(filters.period, now), triageCondition(filters.triage)];
   if (filters.business !== "all") conditions.push({ business: businessFromParam(filters.business) });
   if (filters.importance !== "all") conditions.push({ importance: IMPORTANCE_BY_PARAM[filters.importance] });
   if (filters.keyword) conditions.push(keywordCondition(filters.keyword));
   return prisma.industryInformation.findMany({
     where: { AND: conditions },
-    include: ARTICLE_ANALYSIS_INCLUDE,
+    include: TIMELINE_INCLUDE,
     orderBy: [{ collectedAt: "desc" }, { publishedAt: "desc" }],
     take: TIMELINE_LIMIT,
   });
@@ -112,6 +120,8 @@ export async function getLastCollectedAt(): Promise<Date | null> {
 }
 
 export type TodayCollection = RunCounts & {
+  /** 今日の取り込みのうち、過去に採用した記事の続報として紐付けた件数（新しく取り込んだ件数の内数）。 */
+  followUpCount: number;
   /** 今日（JST）始まった収集ラン（RSS・AI検索収集・AIDE経由の週報登録）のID。カードのNEW／更新バッジに使う。 */
   runIds: string[];
   /** 今日の最後のランの開始時刻。今日まだ収集していなければnull。 */
@@ -125,7 +135,10 @@ export async function getTodayCollection(now = new Date()): Promise<TodayCollect
     select: { id: true, startedAt: true, insertedCount: true, mergedCount: true, excludedCount: true },
     orderBy: { startedAt: "desc" },
   });
-  return { ...sumRunCounts(runs), runIds: runs.map((run) => run.id), lastRunAt: runs[0]?.startedAt ?? null };
+  const runIds = runs.map((run) => run.id);
+  // 続報として元記事へ紐付けた件数（#477）。専用の列は持たず、今日のランが作った`canonicalId`付きの記事を数える。
+  const followUpCount = runIds.length ? await prisma.industryInformation.count({ where: { collectionRunId: { in: runIds }, canonicalId: { not: null }, canonical: { reviewedAt: { not: null } } } }) : 0;
+  return { ...sumRunCounts(runs), followUpCount, runIds, lastRunAt: runs[0]?.startedAt ?? null };
 }
 
 export type MergedSource = { url: string; normalizedUrl: string; sourceName: string; publisher: string | null; isPrimarySource: boolean; mergedAt: string; collectionRunId: string };

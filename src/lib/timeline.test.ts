@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { cardBadge, dayHeading, defaultTriageTab, formatDayWithWeekday, groupByCollectedDay, isStaleArticle, jstDayKey, jstDayStart, parsePeriodParam, periodParam, sumRunCounts } from "./timeline.ts";
+import { cardBadge, dayHeading, defaultTriageTab, followUpCutoff, followUpLabel, formatDayWithWeekday, groupByCollectedDay, isStaleArticle, jstDayKey, jstDayStart, parsePeriodParam, periodParam, sumRunCounts } from "./timeline.ts";
 
 const jst = (value: string) => new Date(`${value}+09:00`);
 
@@ -88,5 +88,17 @@ describe("今日の収集", () => {
     assert.equal(cardBadge({ collectionRunId: "run-old", updatedByRunId: "run-today" }, today), "updated");
     assert.equal(cardBadge({ collectionRunId: "run-old", updatedByRunId: "run-old" }, today), null);
     assert.equal(cardBadge({ collectionRunId: null, updatedByRunId: null }, today), null);
+  });
+});
+
+describe("続報（#477）", () => {
+  it("元記事を探す下限は30日前", () => {
+    const now = jst("2026-11-18T12:00:00");
+    assert.equal(followUpCutoff(now).getTime(), jst("2026-10-19T12:00:00").getTime());
+  });
+
+  it("文言は採用日をJSTのM/Dで出す", () => {
+    assert.equal(followUpLabel(jst("2026-11-02T00:30:00"), "新製品を発表"), "11/02に採用した『新製品を発表』の続報です");
+    assert.equal(followUpLabel(null, "新製品を発表"), "採用した『新製品を発表』の続報です");
   });
 });
