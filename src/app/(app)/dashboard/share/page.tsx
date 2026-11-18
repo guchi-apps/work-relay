@@ -44,8 +44,8 @@ export default async function SharePage({ searchParams }: { searchParams: Promis
 
   return (
     <section className="content">
-      <Link className="breadcrumb" href="/dashboard/inbox">
-        ‹　新着記事へ
+      <Link className="breadcrumb" href="/dashboard">
+        ‹　業界ニュースへ
       </Link>
       <header className="page-header">
         <div>

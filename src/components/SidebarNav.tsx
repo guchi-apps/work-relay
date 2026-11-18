@@ -2,11 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Camera, Inbox, LayoutGrid, NotebookPen } from "lucide-react";
+import { Camera, LayoutGrid, NotebookPen } from "lucide-react";
 
 const workspaceLinks = [
   { href: "/dashboard", icon: LayoutGrid, label: "業界ニュース" },
-  { href: "/dashboard/inbox", icon: Inbox, label: "新着記事" },
   { href: "/dashboard/image-mail", icon: Camera, label: "画像を送る" },
   { href: "/dashboard/memo", icon: NotebookPen, label: "メモを送る" },
 ];

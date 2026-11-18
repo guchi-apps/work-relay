@@ -194,33 +194,31 @@ DBに依存しない形（コードレビュー・curlでの入力検証確認�
 `NEXT_PUBLIC_SUPABASE_URL`が未設定でも到達できる。一方、Prismaを呼ぶ画面は`DATABASE_URL`が無い・繋がらないと
 起動画面で止まって見える（前掲「データベース」の節）。
 
-## 新着記事の仕分け画面（`/dashboard/inbox`。元は`/`、#42）
+## 業界ニュース画面（`/dashboard`。タイムライン、#476）
 
-直近で収集された業界情報（`IndustryInformation`）を`collectedAt`降順で最大`RECENT_LIMIT`（60）件
-取得し、JSTの日付基準で「今日」「昨日」「それ以前」に区分して表示する
-（`src/lib/industry-information.ts`の`listRecentIndustryInformation()`・`getRecencyLabel()`）。
+**業界ニュースは1本のタイムラインで、新着記事画面（`/dashboard/inbox`）はここへ統合した（#476）。**
+以前は「公開日の週 × 事業区分」の段組み（業界ニュース）と、収集日順の仕分け画面（新着記事）が別に
+あり、RSSが公開30日前の記事まで「補足」として取り込んでいたこともあって、今日取り込んで採用した
+記事が過去の週へ入り「今日何が届いたか」が分からなかった。
 
-収集は日次（`collection-daily.yml`。`COLLECTION_LIMIT`は1回30件）だが、新規の記事が無い日もあり、
-「今日・昨日」だけに絞ると空になる日がある。そのため常に直近の記事を件数上限で取得し、区分ラベルは
-表示上の見出しとしてのみ使う
-（0件になる区分の見出しは出さない）。
-
-**#124でログイン後の初期画面を業界ニュース画面（`/dashboard`）に変えたのにともない、この画面は
-`/`から`/dashboard/inbox`へ移した。** `/`（`src/app/(app)/page.tsx`）は認証チェックのあと
-`/dashboard`へ`redirect()`するだけの薄いページになっている。業界ニュース画面からこの画面への
-遷移は、未判定の記事が1件以上あるときだけ出る強調バナー（`.new-banner`）と、サイドバーnavの
-「新着記事」リンクの2経路。事業別の絞り込みや週送りはこれまでどおり`/dashboard`が担う。
-
-## 業界ニュース画面（`/dashboard`）
-
-画面は`industry_information`の表示専用で、書き込みはAIDE経由の`POST /api/internal/weekly-report`
-だけが行う（#32）。クエリの組み立てと表示用の整形は`src/lib/industry-information.ts`に置き、
-`src/app/dashboard/page.tsx`はその結果を描くだけにしてある。1週ぶんは全体6件・各事業3件までなので、
-絞り込み後の件数はそのまま描画してよい大きさに収まる。
-
-**ログイン後の初期画面（#124）。** 未判定の新着記事（`countTriage()`の`pending`）が1件以上あるときだけ、
-画面上部に仕分け画面（`/dashboard/inbox`）への強調バナー（`.new-banner`）を出す。0件のときは
-バナー自体を出さない——常時出すと「未判定が無い週」の方が多いため、無条件のバナーはノイズになる。
+- **並び順は「取り込んだ日（JST、`collectedAt`）の新しい日が上 → 同じ日の中は公開日の新しい順」**
+  （`src/lib/timeline.ts`の`groupByCollectedDay()`）。公開日だけで並べると、取り込みが遅れた記事が
+  下に埋もれて「今日何が来たか」が見えなくなるため、日付区切りは取り込んだ日にした。取り込んだ時点で
+  公開から3日以上たっていた記事は、公開日を橙色で示す（`isStaleArticle()`）
+- **仕分けのタブ（未判定・採用・すべて・不採用）をこの画面が持つ。** `?triage=`が無いときは、未判定が
+  あれば未判定、無ければ採用を開く（`defaultTriageTab()`）。未判定タブのカードは採用／不採用と詳細だけ
+  （`triageOnly`）、それ以外のタブはAI解析・メールで送るも出す
+- **期間（`?period=`）は既定が「直近30日（取り込んだ日）」**。`w0`〜`w-8`を選ぶと、従来どおり公開日の
+  週（`weekCondition()`）で引く（週報メールを作るとき用）。週送りスワイプ（`SwipeWeekNav`）と
+  カレンダーピッカー（`WeekCalendarPicker`）はやめた。1画面は`TIMELINE_LIMIT`（200）件まで
+- **画面上部の「今日の収集」** は、今日（JST）始まった`CollectionRun`（RSS・AI検索収集・AIDE経由の
+  週報登録）の`insertedCount`・`mergedCount`・`excludedCount`を合計して出す（`getTodayCollection()`）。
+  RSSで期間外として落とした件数は`CollectionRun`に残していないため出さない（列追加のマイグレーションを
+  避けた。#476の計画レビュー）
+- `/dashboard/inbox`は開いていた仕分けタブのまま`/dashboard?triage=…`へ転送するだけのページ。Push通知の
+  遷移先（`NEW_ARTICLES_URL`）・記事詳細の「戻る」も業界ニュースのタブへ揃えた。記事詳細へのリンクの
+  `?from=inbox`は統合前の名残で、既に開かれているURLを壊さないためそのまま使う
+- `/`（`src/app/(app)/page.tsx`）は認証チェックのあと`/dashboard`へ`redirect()`するだけ（#124）
 
 ### 週の区切りはJSTの日曜0時
 
@@ -264,42 +262,25 @@ DBに依存しない形（コードレビュー・curlでの入力検証確認�
 バックする。収集ランに紐付いていない記事（#37より前に登録したもの、あるいはランに紐付いていても
 公開日・発生日がどちらも未設定の記事）は、従来どおり収集日（`collectedAt`）の週で拾う。
 
-### 週選択のカレンダーピッカー（#125）
-
-`.week-nav`の週表示は`WeekCalendarPicker`（クライアントコンポーネント）で、クリックすると
-選べる9週間（今週〜8週間前）を日曜始まりの月カレンダーで表示するポップオーバーを開く。日付を
-クリックするとその週へ遷移し、今日の日付は二重丸で強調、各行には週番号（ISO 8601週番号）を表示する。
-
-**日付計算はすべてサーバー側（`src/lib/jst-week.ts`の`buildWeekCalendarMonths()`）で完結させ、
-クライアントには計算済みのグリッドデータ（月ごとの週の行・各日のISO日付文字列・所属する
-`weekOffset`・今日かどうか）だけを渡す。** クライアントコンポーネントは開閉・ホバー状態だけを持ち、
-`Date`を作り直さない（`jst-week.ts`の「Prismaに触れない純粋関数へ日付計算を寄せる」方針をそのまま
-UIの計算にも適用したもの）。週の境界が日曜0時始まりに揃っているため、選べる範囲は常に週の境界
-ちょうどで切れており、月をまたぐ週（例: 8/31〜9/6）もカレンダーの1行の中で自然に表現できる。
-選べる範囲より先（今週より後ろ）は、直近月をカレンダーとして見やすくするため、選択不可の行で
-当月末まで埋める。
-
-ISO週番号は業界情報の週判定には使わない、カレンダー上の目印表示専用（`getIsoWeekNumber()`）。
-
 ### 絞り込みはクエリ側で行う
 
-事業区分・情報区分（`isPrimarySource`）・重要度・キーワードは、すべてPrismaの`where`へ渡す。
-並び順はMySQL/MariaDBのENUMが**定義順**で並ぶ性質に乗せており、`periodScope`（IN_SCOPE→補足）・
-`importance`（HIGH→MEDIUM→REFERENCE）をそのまま`asc`で指定すると「補足は後ろ・重要度順」になる
-（`prisma/migrations/*/migration.sql`のENUM定義順が正）。
+仕分けの状態・事業区分・重要度・期間・キーワードは、すべてPrismaの`where`へ渡す（`listTimeline()`）。
+情報区分（一次情報／関連記事）とAI解析状態の絞り込みは#476でやめた（タイムライン化で使う場面が無くなった）。
 
 キーワードは、文字列列（タイトル・要約・対象企業・対象商品・情報源・発行元）が**部分一致**、
 JSON列の`keywords`・`tags`が**要素の完全一致**（`array_contains` = `JSON_CONTAINS`）になる。
 Prismaが出せるJSON列の条件が完全一致までのためで、`ロッカー`では`ロッカー事業`というタグに
 当たらない。タグは登録時の語をそのまま入れる前提で使う。
 
-### 「NEW／更新」バッジと統合元の開閉パネル（#43）
+### 「NEW／更新」バッジと「同じ話題の記事」（#43・#476）
 
-カードには、直近の収集ラン（`getLatestCollectionRunId()`）と比べて新規追加・内容更新された
-ものだけに「NEW」「更新」バッジを出す。`collectionRunId`（作成時のラン、週判定に使うため不変）が
-直近ランと一致すれば「NEW」、`updatedByRunId`（最後に統合・更新したラン）が一致すれば「更新」。
-`mergedSources`（統合元URLのJSON配列）を1件以上持つ記事だけ、カード下部に「更新履歴を見る」の
-開閉パネルを出し、統合元URL一覧・`updatedAt`（最終更新日時）・`updateReason`（更新理由）を表示する。
+カードには、**今日（JST）始まった収集ラン**で新規追加・内容更新されたものだけに「NEW」「更新」バッジを
+出す（`cardBadge()`。#43では直近1本のランと比べていたが、日次でRSSとAI検索収集の2本が走るため今日の
+ラン全体と比べるようにした）。`collectionRunId`（作成時のラン）が今日のランなら「NEW」、
+`updatedByRunId`（最後に統合・更新したラン）が今日のランなら「更新」。
+`mergedSources`（統合元URLのJSON配列）を1件以上持つ記事だけ、カード内に「同じ話題の記事 n件を
+まとめています」の開閉パネルを出し、統合元の記事・最終更新日時・`updateReason`（更新理由）を表示する。
+カードには`implications`がある記事だけ「仕事への示唆」を1行で出す。
 
 ## 日次収集とイベント統合（#43）
 
@@ -314,6 +295,13 @@ Prismaが出せるJSON列の条件が完全一致までのためで、`ロッカ
 時刻に揃えた）。`targetFrom`は「今週（JST日曜0時始まり）の開始」に固定する
 ——ローリング7日窓のままだと日次実行のたびに週境界をまたぐランが発生し、日次差分を週内へ集約する
 前提が崩れるため。
+
+**取り込む記事はRSSの公開日が直近7日（`RSS_WINDOW_DAYS`）以内のものだけ**（#476。`src/lib/collection-rules.ts`の
+`isWithinRssWindow()`）。以前は公開30日以内の記事を「補足」（`periodScope`＝`PAST_30_DAYS_SUPPLEMENT`）として
+取り込んでいたため、毎朝の新着に2〜4週間前のニュースが混ざり「今日何が届いたか」が分からなくなっていた。
+AI検索収集（`COLLECTION_SEARCH_WINDOW_DAYS`＝7日）と同じ基準に揃え、RSSの記事は常に`IN_SCOPE`で登録し、
+ランの`supplementalFrom`も記録しない（列・ENUMの値は過去データとAIDE経由の週報登録の互換のため残す）。
+期間外で落とした件数は記録しない。
 
 AIDE経由の週報登録（`importWeeklyReport()`）と自動収集（`runDailyCollection()`）は、どちらも
 記事1件の取り込みを`upsertIndustryInformationEvent()`に委ねる。
@@ -476,12 +464,9 @@ Teal `#087F78`・Orange `#D97735`・Paper `#F7FAF8`・濃色背景用Mint `#70D6
 - **⚙（設定）と📷（画像を送る）はスマホ専用の固定バーが持つ。** `HeaderUserMenu`は
   PC・iPad向けのアバター＋ログアウトだけになった。バーのリンクは現在の画面と同じ行き先の
   ものを出さない（`/settings`では⚙、`/dashboard/image-mail`では📷を描画しない）
-- **左端からの右スワイプでも開く。業界ニュースの週送りスワイプ（#53）と奪い合うため、
-  境界を`src/lib/nav-swipe.ts`に置いている。** 週送り（`SwipeWeekNav`）がマウントされる
-  `/dashboard`だけ狭い境界（`EDGE_ZONE_PX`＝24px）を使い、それ以外の画面は開きやすさを
-  優先して広い境界（`WIDE_EDGE_ZONE_PX`＝48px）を使う（#123。24pxでは指でつかみにくいと
-  実機確認で指摘されたが、週送りと取り合う`/dashboard`だけは境界を広げられないため、画面
-  ごとに使い分けた）。境界内から始まったスワイプはドロワー、それ以外は週送りが受け取る。
+- **左端からの右スワイプでも開く。** 境界は`src/lib/nav-swipe.ts`の`WIDE_EDGE_ZONE_PX`（48px）。
+  以前は業界ニュースの週送りスワイプ（#53）と奪い合うため`/dashboard`だけ24pxに狭めていたが（#123）、
+  #476で週送りをやめたので全画面で同じ境界を使う。
   両方が反応すると「メニューが開きながら前週へ飛ぶ」ことになる。なおiOS Safariでは左端
   スワイプがブラウザの「戻る」と競合し得るため、☰ボタンを確実な導線として必ず併置する
 - **境界内の`touchmove`で「横方向のドラッグ」と確定した時点でだけ`event.preventDefault()`を
@@ -987,7 +972,7 @@ VPSのポーラー → claim（kind: "collection_search"）→ codex exec ＋ We
 ## 新着記事のPush通知（#231）
 
 日次収集（`POST /api/collection/daily`）で新規記事（`insertedCount`>0）が入った日に、購読済みの端末へ
-Web Pushで「今日の新着記事がN件あります」を送る。0件の日は送らない。タップで`/dashboard/inbox`を開く。
+Web Pushで「今日の新着記事がN件あります」を送る。0件の日は送らない。タップで業界ニュースの未判定タブ（`/dashboard?triage=pending`。#476で新着記事画面を統合）を開く。
 
 - **`web-push`＋VAPID＋Service Worker（`public/sw.js`）。** issue-deckと同じ方式。SWは`push`表示と
   `notificationclick`だけで、`fetch`は扱わない（#68の方針のまま）。登録するのは設定画面の

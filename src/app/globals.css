@@ -86,55 +86,33 @@ ul.history{margin:0;padding:0;display:flex;flex-direction:column}ul.history li{l
 .mail-preview{border:1px solid var(--line);border-radius:8px;overflow:hidden}.mail-preview .bar{background:var(--chip);border-bottom:1px solid var(--line);padding:7px 12px;font-size:10.5px;color:var(--muted);letter-spacing:.04em}.mail-frame{max-height:520px;overflow:auto;background:#eef2f0}.success-banner.error{background:var(--warnbg);border-color:#f0c39a}.success-banner.error .dot{background:var(--warn)}.success-banner.error p{color:var(--warn)}
 @media(max-width:767px){.basis-bar{flex-direction:column;align-items:stretch;gap:9px;padding:12px}.basis-bar .segmented{width:100%}.segmented a{padding:9px 4px;font-size:11px}.basis-bar .hint{min-width:0}.ai-strip{padding:12px}.ai-strip .sep{display:none}.ai-strip button{flex:1}.newsmail-card{padding:15px;border-radius:12px}.mail-frame{max-height:360px}.mail-chips a{margin-left:0}}
 
-/* 週選択のカレンダーピッカー（#125）。`.week-nav`（既存の‹ ›送り）の中央に置く、
-   クリックで開くポップオーバー。日付グリッド・週番号はサーバー側で計算済みのものをそのまま
-   描画するだけなので、ここでは見た目だけを持つ。 */
-.week-picker{position:relative;flex:1 1 auto;min-width:0}
-.week-trigger{display:inline-flex;align-items:center;justify-content:center;width:100%;gap:7px;border:1px solid transparent;background:none;color:var(--ink);font:700 14px inherit;padding:6px 10px;border-radius:7px;cursor:pointer}
-.week-trigger:hover,.week-trigger.open{background:var(--teal-pale);color:var(--accent)}
-.picker{position:absolute;top:calc(100% + 8px);left:50%;transform:translateX(-50%);width:min(520px,88vw);max-height:min(560px,70vh);overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:0 24px 48px -20px rgba(10,20,20,.35);padding:16px 18px 14px;z-index:20}
-.picker-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
-.picker-head h3{font-size:13px;margin:0}
-.picker-head button{border:0;background:none;color:var(--muted);font-size:16px;cursor:pointer;line-height:1;padding:2px}
-.picker-legend{display:flex;gap:14px;font-size:10.5px;color:var(--muted);margin-bottom:10px}
-.picker-legend b{display:inline-flex;align-items:center;gap:5px;font-weight:400}
-.dot-selected{width:9px;height:9px;border-radius:2px;background:var(--teal-pale);border:1px solid var(--teal);display:inline-block}
-.month-block{margin-bottom:10px}
-.month-title{font-size:11.5px;font-weight:700;color:var(--ink);margin:6px 0 6px}
-.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
-.cal-grid .gcell{display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--muted);height:28px}
-.cal-grid a.daynum{color:var(--ink);text-decoration:none}
-.cal-grid .daynum{position:relative;border-radius:6px}
-.cal-grid .daynum span{position:relative;z-index:2}
-.cal-grid .daynum.disabled{color:var(--faint);pointer-events:none}
-.cal-grid .daynum.in-selected{background:var(--teal-pale);color:var(--teal-deep);font-weight:700}
-.cal-grid .daynum.in-hover{background:var(--chip);color:var(--soft)}
-.cal-grid .daynum.in-selected.row-start,.cal-grid .daynum.in-hover.row-start{border-top-left-radius:8px;border-bottom-left-radius:8px}
-.cal-grid .daynum.in-selected.row-end,.cal-grid .daynum.in-hover.row-end{border-top-right-radius:8px;border-bottom-right-radius:8px}
-.picker-foot{margin-top:8px;padding-top:10px;border-top:1px dashed var(--line);font-size:11.5px;color:var(--muted)}
-.picker-foot b{color:var(--ink)}
-.picker-foot .tag{font-size:10px;font-weight:700;color:var(--accent);background:var(--teal-pale);padding:1px 8px;border-radius:99px;margin-left:6px}
-.picker-note{font-size:10px;color:var(--faint);margin-top:6px;line-height:1.6}
-.picker-scrim{display:none}
-.picker-handle{display:none}
-@media(max-width:767px){
-  .week-trigger{font-size:12px;gap:5px;padding:6px 4px}
-  .picker-scrim{display:block;position:fixed;inset:0;background:rgba(18,32,36,.5);border:0;padding:0;z-index:29}
-  .picker{position:fixed;left:0;right:0;top:auto;bottom:0;transform:none;width:auto;max-height:78vh;margin-top:0;border-radius:20px 20px 0 0;display:flex;flex-direction:column;overflow:visible;padding-bottom:calc(14px + env(safe-area-inset-bottom,0px));z-index:30;box-shadow:0 -14px 34px -10px rgba(10,20,20,.35)}
-  .picker-handle{display:block;flex:none;width:36px;height:4px;border-radius:99px;background:var(--line);margin:2px auto 8px}
-  .picker-scroll{overflow-y:auto;flex:1;min-height:0}
-  .cal-grid .gcell{height:30px;font-size:11px}
-}
-
-/* 業界ニュースを初期画面にした際の「新着記事あります」バナー（#124）。未判定の記事が
-   あるときだけ表示し、仕分け画面（/dashboard/inbox）へ誘導する強調リンク。 */
-.new-banner{display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,#0a938b,var(--teal));color:#fff;border-radius:12px;padding:14px 18px;margin-bottom:18px;text-decoration:none;box-shadow:0 14px 26px -16px rgba(8,127,120,.55)}
-.new-banner .dot{flex:none;width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.18);display:grid;place-items:center;font-size:16px}
-.new-banner .body{flex:1;min-width:0}
-.new-banner .headline{font-weight:800;font-size:13.5px;margin:0}
-.new-banner .sub{font-size:11px;margin:2px 0 0;color:#dff2ee}
-.new-banner .go{flex:none;font-size:11.5px;font-weight:700;background:rgba(255,255,255,.16);padding:7px 13px;border-radius:8px;white-space:nowrap}
-@media(max-width:767px){.new-banner{padding:12px 14px}.new-banner .sub{display:none}}
+/* 業界ニュースのタイムライン（#476）。新着記事画面を統合し、取り込んだ日ごとに区切って新しい順に並べる。
+   「今日の収集」の帯は解析状況の帯（.codex-strip）と同じ濃色、カード・日付見出し・タブは既存のものを流用する。 */
+.today-strip{display:flex;align-items:center;gap:10px 20px;flex-wrap:wrap;background:var(--navy);color:#dcebea;border-radius:12px;padding:13px 18px;margin-bottom:14px}
+.today-strip .ttl{font-size:12px;font-weight:700;color:#fff}
+.today-strip .ttl small{display:block;font-weight:400;color:#8db3b0;font-size:10.5px}
+.today-strip .st{display:flex;flex-direction:column;line-height:1.25}
+.today-strip .st b{font-size:19px;color:#fff;font-variant-numeric:tabular-nums}
+.today-strip .st span{font-size:10.5px;color:#9fc0bd}
+.today-strip .st.hl b{color:#7fe0c7}
+.today-strip .go{margin-left:auto;background:var(--teal);color:#fff;font-size:12px;font-weight:700;border-radius:8px;padding:8px 14px;white-space:nowrap;text-decoration:none}
+.biz-chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.biz-chips a{font-size:11.5px;border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:4px 12px;color:var(--soft);display:inline-flex;align-items:center;gap:6px;text-decoration:none}
+.biz-chips a i{width:7px;height:7px;border-radius:50%;background:var(--teal)}.biz-chips a i.orange{background:var(--orange)}.biz-chips a i.violet{background:#7a5bc7}
+.biz-chips a.on{background:var(--teal-pale);border-color:var(--teal-line);color:var(--accent);font-weight:700}
+.timeline-filters{margin-bottom:6px}
+.timeline-card .biz{flex-wrap:wrap;font-weight:700;color:var(--soft)}
+.timeline-card .biz .badge{margin-left:auto}
+.timeline-card h3{margin:0}
+.timeline-card .meta .stale,.timeline-page .note .stale{color:var(--amber);font-weight:700}
+.implication{font-size:12px;background:var(--teal-pale);border-left:3px solid var(--teal);border-radius:0 6px 6px 0;padding:6px 10px;margin:8px 0 0;color:var(--teal-deep);line-height:1.7}
+.implication b{font-size:10.5px;margin-right:8px}
+.same-topic{border:1px dashed var(--line);border-radius:8px;padding:7px 11px;margin-top:8px;font-size:11.5px;color:var(--soft)}
+.same-topic summary{cursor:pointer;font-weight:700;color:var(--ink)}
+.same-topic ul{margin:6px 0 2px;padding-left:18px}
+.same-topic a{color:var(--accent)}
+.same-topic .reason{margin:4px 0 0;font-size:10.5px;color:var(--muted)}
+@media(max-width:767px){.today-strip{padding:12px 14px}.today-strip .ttl{width:100%}.today-strip .st b{font-size:17px}.today-strip .go{margin-left:0;width:100%;text-align:center}.biz-chips{flex-wrap:nowrap;overflow-x:auto}.biz-chips a{flex:none}}
 
 /* 解析状況画面（#137）。帯（.codex-strip）はクリックで開けるようにし、画面は既存トークンと
    `.chip`の状態色をそのまま使う。記事詳細の`.panel`・`dl.kv`とは余白・並びが違うため`q-`で分ける。 */
@@ -225,7 +203,6 @@ a.codex-strip{text-decoration:none;transition:background .15s}a.codex-strip:hove
   .by.ai{background:#1b2f3a;color:#9cc4d8}.by.human{background:#2b2442;color:#c1b0ec}
   .mail-frame{background:var(--chip)}
   .mail-implication{border-left-color:#2f6b64}
-  .cal-grid .daynum.in-selected{color:var(--teal-deep)}
   .ai-hint code{background:rgba(236,193,120,.16)}
   .triage-tabs a.active b{background:#3a4d54}
   .login-card,.picker,.mail-sheet{box-shadow:0 18px 44px -24px rgba(0,0,0,.7)}

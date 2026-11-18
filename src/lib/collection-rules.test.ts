@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { decideDailyRunStatus, fitsNormalizedUrlColumn, MAX_NORMALIZED_URL_LENGTH } from "./collection-rules.ts";
+import { decideDailyRunStatus, fitsNormalizedUrlColumn, isWithinRssWindow, MAX_NORMALIZED_URL_LENGTH, RSS_WINDOW_DAYS } from "./collection-rules.ts";
 
 describe("fitsNormalizedUrlColumn", () => {
   it("列幅ちょうどのURLは収まる", () => {
@@ -37,5 +37,24 @@ describe("decideDailyRunStatus", () => {
 
   it("登録しようとした記事が全部失敗ならFAILED", () => {
     assert.equal(decideDailyRunStatus({ ...base, articleFailures: 10 }), "FAILED");
+  });
+});
+
+describe("isWithinRssWindow", () => {
+  const now = new Date("2026-11-18T05:00:00+09:00");
+  const DAY = 24 * 60 * 60 * 1000;
+
+  it("直近7日以内に公開された記事は取り込む", () => {
+    assert.equal(isWithinRssWindow(new Date(now.getTime() - DAY), now), true);
+    assert.equal(isWithinRssWindow(new Date(now.getTime() - RSS_WINDOW_DAYS * DAY), now), true);
+  });
+
+  it("7日より前に公開された記事は取り込まない（以前の30日補足は廃止）", () => {
+    assert.equal(isWithinRssWindow(new Date(now.getTime() - RSS_WINDOW_DAYS * DAY - 1), now), false);
+    assert.equal(isWithinRssWindow(new Date(now.getTime() - 20 * DAY), now), false);
+  });
+
+  it("実行時点より未来の公開日は取り込まない", () => {
+    assert.equal(isWithinRssWindow(new Date(now.getTime() + 60_000), now), false);
   });
 });

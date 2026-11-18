@@ -19,6 +19,8 @@ type Props = {
   hideActions?: boolean;
   /** 新着記事の確認画面用。「AI解析」を出さず、採用／不採用と「詳細を見る」だけにする（#451）。 */
   triageOnly?: boolean;
+  /** 開いている仕分けタブ。`?triage=`が無い（既定のタブを開いている）ときに詳細の戻り先へ引き継ぐ（#476）。 */
+  triageTab?: string;
 };
 
 /**
@@ -32,9 +34,9 @@ type Props = {
  * 仕分けのボタンは新着記事画面と同じ`TriageActions`で、「週報候補から外す／戻す」という
  * 以前の文言は「採用／不採用」に揃えた（意味は同じで、`weeklyCandidate`を切り替える）。
  */
-export default function ArticleAnalysisActions({ articleId, status, triage, showDetailLink = true, hideActions = false, triageOnly = false }: Props) {
+export default function ArticleAnalysisActions({ articleId, status, triage, showDetailLink = true, hideActions = false, triageOnly = false, triageTab: currentTab }: Props) {
   const router = useRouter();
-  const triageTab = useSearchParams().get("triage");
+  const triageTab = useSearchParams().get("triage") ?? currentTab ?? null;
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const inFlight = isAnalysisInFlight(status);
@@ -60,7 +62,7 @@ export default function ArticleAnalysisActions({ articleId, status, triage, show
           <TriageActions articleId={articleId} state={triage} showDetailLink={false} />
         </>
       )}
-      {showDetailLink && <Link className="btn quiet detail detail-link" href={articleDetailHref(articleId, triageOnly ? "inbox" : null, triageTab)}>詳細を見る</Link>}
+      {showDetailLink && <Link className="btn quiet detail detail-link" href={articleDetailHref(articleId, "inbox", triageTab)}>詳細を見る</Link>}
       {error && <span className="ai-error">{error}</span>}
     </span>
   );
