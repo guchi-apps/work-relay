@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import TriageActions from "@/components/TriageActions";
+import { articleDetailHref } from "@/lib/article-back-link";
 import { isAnalysisInFlight } from "@/lib/analysis-display";
 import type { JobStatusValue } from "@/lib/article-analysis";
 import type { TriageState } from "@/lib/triage";
@@ -58,7 +59,7 @@ export default function ArticleAnalysisActions({ articleId, status, triage, show
           <TriageActions articleId={articleId} state={triage} showDetailLink={false} />
         </>
       )}
-      {showDetailLink && <Link className="btn quiet detail detail-link" href={`/dashboard/articles/${articleId}`}>詳細を見る</Link>}
+      {showDetailLink && <Link className="btn quiet detail detail-link" href={articleDetailHref(articleId, triageOnly ? "inbox" : null)}>詳細を見る</Link>}
       {error && <span className="ai-error">{error}</span>}
     </span>
   );
