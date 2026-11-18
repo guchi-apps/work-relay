@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { enqueueMissingSummaryAnalyses } from "@/lib/article-analysis";
 import { buildFeeds, getBusinesses, matchExcludeKeyword, zeroCounts, type BusinessDef } from "@/lib/businesses";
 import { decideDailyRunStatus, fitsNormalizedUrlColumn, MAX_SHORT_TEXT_LENGTH, normalizeUrl } from "@/lib/collection-rules";
 import { getWeekRange, weekCondition, toMergedSources, type MergedSource, type WeekRange } from "@/lib/industry-information";
@@ -427,6 +428,7 @@ export async function importWeeklyReport(input: WeeklyReportInput): Promise<Week
   const status = errors.length > 0 ? (insertedCount + mergedCount > 0 ? "PARTIAL" : "FAILED") : "SUCCEEDED";
   const result = { runId: run.id, status, targetFrom: targetFrom.toISOString(), targetTo: targetTo.toISOString(), supplementalFrom: supplementalFrom.toISOString(), fetchedCount: input.articles.length, selectedCount: input.articles.length, insertedCount, duplicateCount, mergedCount, excludedCount, failedCount: errors.length, errors, businessCounts, duplicateBusinessCounts } as WeeklyReportImportResult;
   await prisma.collectionRun.update({ where: { id: run.id }, data: { finishedAt: new Date(), status, fetchedCount: result.fetchedCount, selectedCount: result.selectedCount, insertedCount, duplicateCount, mergedCount, excludedCount, failedCount: errors.length, errors, excludedArticles: excludedArticles.length ? (excludedArticles as unknown as Prisma.InputJsonValue) : undefined } });
+  await enqueueMissingSummaryAnalyses();
   return result;
 }
 
@@ -524,5 +526,6 @@ export async function runDailyCollection(now = new Date()): Promise<CollectionRe
   }
   const status = decideDailyRunStatus({ feedCount: feeds.length, feedFailures, selectedCount: selected.length, articleFailures });
   await prisma.collectionRun.update({ where: { id: run.id }, data: { finishedAt: new Date(), status, fetchedCount: candidates.length, selectedCount: selected.length, insertedCount, duplicateCount, mergedCount, excludedCount, failedCount: errors.length, errors, excludedArticles: excludedArticles.length ? (excludedArticles as unknown as Prisma.InputJsonValue) : undefined } });
+  await enqueueMissingSummaryAnalyses();
   return { runId: run.id, status, targetFrom: targetFrom.toISOString(), targetTo: targetTo.toISOString(), supplementalFrom: supplementalFrom.toISOString(), fetchedCount: candidates.length, selectedCount: selected.length, insertedCount, duplicateCount, mergedCount, excludedCount, failedCount: errors.length, errors };
 }

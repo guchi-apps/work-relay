@@ -133,3 +133,13 @@ describe("週報候補からの自動除外", () => {
     assert.equal(shouldAutoExcludeFromWeekly("EXTERIOR", null), false);
   });
 });
+
+import { missingSummaryCutoff, MISSING_SUMMARY_LOOKBACK_DAYS } from "./analysis-job-rules.ts";
+
+describe("missingSummaryCutoff", () => {
+  it("収集日から14日前を下限にする", () => {
+    const now = new Date("2026-11-18T00:00:00.000Z");
+    assert.equal(MISSING_SUMMARY_LOOKBACK_DAYS, 14);
+    assert.equal(missingSummaryCutoff(now).toISOString(), "2026-11-04T00:00:00.000Z");
+  });
+});
