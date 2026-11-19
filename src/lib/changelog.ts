@@ -29,6 +29,18 @@ export type ChangelogEntry = {
  */
 export const APP_CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.5.1",
+    date: "2026-11-19",
+    changes: [
+      "スマホ幅の画面でも、「今日の収集」の数字4つが1行にきれいに収まるようになりました。",
+    ],
+    usage: [
+      "1. スマートフォン（または狭い画面幅）でワークリレーを開く",
+      "2. ホームの「今日の収集」を見る",
+      "3. 成功の目安：4つの数字が折り返されず1行に並んで表示される",
+    ],
+  },
+  {
     version: "2.5.0",
     date: "2026-11-19",
     changes: [
