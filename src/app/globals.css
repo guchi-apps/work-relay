@@ -116,7 +116,7 @@ ul.history{margin:0;padding:0;display:flex;flex-direction:column}ul.history li{l
 .same-topic ul{margin:6px 0 2px;padding-left:18px}
 .same-topic a{color:var(--accent)}
 .same-topic .reason{margin:4px 0 0;font-size:10.5px;color:var(--muted)}
-@media(max-width:767px){.today-strip{padding:12px 14px}.today-strip .ttl{width:100%}.today-strip .st b{font-size:17px}.today-strip .go{margin-left:0;width:100%;text-align:center}.biz-chips{flex-wrap:nowrap;overflow-x:auto}.biz-chips a{flex:none}}
+@media(max-width:767px){.today-strip{padding:12px 14px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 8px}.today-strip .ttl{grid-column:1/-1}.today-strip .st b{font-size:17px}.today-strip .st span{font-size:10px;line-height:1.3}.today-strip .go{grid-column:1/-1;margin-left:0;text-align:center}.biz-chips{flex-wrap:nowrap;overflow-x:auto}.biz-chips a{flex:none}}
 
 /* 解析状況画面（#137）。帯（.codex-strip）はクリックで開けるようにし、画面は既存トークンと
    `.chip`の状態色をそのまま使う。記事詳細の`.panel`・`dl.kv`とは余白・並びが違うため`q-`で分ける。 */
